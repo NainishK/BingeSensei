@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BingeSensei - Watch Smarter. Enjoy More.",
+  title: "BingeSensei - Track, Manage, & Discover",
   description: "Track, Manage, and Discover content across all your services.",
   appleWebApp: {
     title: "BingeSensei",
