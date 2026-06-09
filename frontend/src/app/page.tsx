@@ -91,7 +91,17 @@ export default function Home() {
 
             {/* ── Navigation ── */}
             <nav className={styles.nav}>
-                <div className={styles.brand}>SmartSubs.</div>
+                <div className={styles.brandContainer}>
+                    <Image
+                        src="/logo-dark-theme-final-v3.png"
+                        alt="BingeSensei Logo"
+                        width={160}
+                        height={43}
+                        className={styles.brandLogo}
+                        style={{ objectFit: 'contain' }}
+                        priority
+                    />
+                </div>
                 <div className={styles.navCenter}>
                     <RegionPill region={region} onChange={handleRegionChange} />
                 </div>
@@ -107,7 +117,7 @@ export default function Home() {
                     <span className={styles.badge}>✨ Browse any show, movie, or anime - no account needed</span>
                     <h1 className={styles.title}>
                         Your subscriptions.<br />
-                        <span className={styles.titleHighlight}>One smart dashboard.</span>
+                        <span className={styles.titleHighlight}>One unified dashboard.</span>
                     </h1>
                     <p className={styles.subtitle}>
                         Stop paying for subscriptions you've forgotten about. One dashboard
@@ -140,12 +150,12 @@ export default function Home() {
                                 <div className={`${styles.windowDot} ${styles.red}`} />
                                 <div className={`${styles.windowDot} ${styles.yellow}`} />
                                 <div className={`${styles.windowDot} ${styles.green}`} />
-                                <div className={styles.addressBar}>smartsubs.app/dashboard</div>
+                                <div className={styles.addressBar}>bingesensei.app/dashboard</div>
                             </div>
                             <div className={styles.windowContent}>
                                 <Image
                                     src="/screenshots/overview.png"
-                                    alt="SmartSubs Dashboard Overview"
+                                    alt="BingeSensei Dashboard Overview"
                                     width={1200}
                                     height={800}
                                     className={styles.heroImage}
