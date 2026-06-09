@@ -20,6 +20,11 @@ export default function DashboardLayout({
 
     const { theme } = useTheme();
     const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (theme === 'system') {
@@ -78,7 +83,7 @@ export default function DashboardLayout({
                     </button>
                     <Link href="/dashboard" className={styles.mobileLogoContainer}>
                         <Image
-                            src={activeTheme === 'dark' ? '/logo-dark-theme-final-v3.png' : '/logo-light-theme-final-v3.png'}
+                            src={(!mounted || activeTheme === 'dark') ? '/logo-dark-theme-final-v3.png' : '/logo-light-theme-final-v3.png'}
                             alt="BingeSensei Logo"
                             width={104}
                             height={28}

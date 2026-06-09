@@ -9,8 +9,8 @@ interface RegionPillProps {
 }
 
 const SUPPORTED_REGIONS = [
-    { code: 'IN', label: '🇮🇳 India' },
-    { code: 'US', label: '🇺🇸 United States' },
+    { code: 'IN', label: '🇮🇳 India', flag: '🇮🇳' },
+    { code: 'US', label: '🇺🇸 United States', flag: '🇺🇸' },
 ];
 
 export default function RegionPill({ region, onChange }: RegionPillProps) {
@@ -24,7 +24,8 @@ export default function RegionPill({ region, onChange }: RegionPillProps) {
                 onClick={() => setOpen(o => !o)}
                 title="Change region"
             >
-                {current.label}
+                <span className={styles.fullLabel}>{current.label}</span>
+                <span className={styles.flagLabel}>{current.flag}</span>
                 <span className={styles.caret}>▾</span>
             </button>
             {open && (

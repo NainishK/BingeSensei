@@ -64,3 +64,20 @@
     color: #A78BFA;
     background: rgba(167, 139, 250, 0.08);
 }
+
+.flagLabel {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .fullLabel {
+        display: none;
+    }
+    .flagLabel {
+        display: inline;
+    }
+    .dropdown {
+        left: auto;
+        right: 0;
+    }
+}

@@ -441,17 +441,21 @@
 /* Phone Specific Optimizations */
 @media (max-width: 640px) {
   .nav {
-    padding: 1rem 1.5rem;
+    padding: 1rem;
+    gap: 0.5rem;
+  }
+
+  .brandContainer {
+    max-width: 110px;
+    height: auto;
   }
 
   .navLinks {
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .loginBtn {
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-    white-space: nowrap;
+    display: none;
   }
 
   .hero {
