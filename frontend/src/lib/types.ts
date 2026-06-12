@@ -85,6 +85,7 @@ export interface AIStrategyItem {
     service: string;
     reason: string;
     savings?: number;
+    billing_cycle?: string;
 }
 
 export interface AIGapItem {

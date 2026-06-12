@@ -910,6 +910,14 @@ def get_unified_insights(
              
              if has_picks or has_strategy:
                  cached['picks'] = valid_picks
+                 
+                 # Enrich Strategy Items in Cache Hit
+                 if "strategy" in cached:
+                     billing_map = {s.service_name.lower().strip(): s.billing_cycle.lower().strip() for s in current_user.subscriptions}
+                     for strat in cached["strategy"]:
+                         service_name = strat.get("service", "").lower().strip()
+                         billing_cycle = billing_map.get(service_name, "monthly")
+                         strat["billing_cycle"] = "yearly" if "year" in billing_cycle or "annual" in billing_cycle else "monthly"
                  return cached
 
     # 1. Check Permissions (Only if we need to generate)
@@ -1073,6 +1081,14 @@ def get_unified_insights(
     if not insights:
         # Return empty structure on failure
         return {"picks": [], "strategy": [], "gaps": []}
+
+    # Enrich Strategy Items with their actual billing cycle from user subscriptions
+    if "strategy" in insights:
+        billing_map = {s.service_name.lower().strip(): s.billing_cycle.lower().strip() for s in subs}
+        for strat in insights["strategy"]:
+            service_name = strat.get("service", "").lower().strip()
+            billing_cycle = billing_map.get(service_name, "monthly")
+            strat["billing_cycle"] = "yearly" if "year" in billing_cycle or "annual" in billing_cycle else "monthly"
         
     # Cache
     country = current_user.country or "US"

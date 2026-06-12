@@ -8,17 +8,44 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
+def _is_provider_match(user_subs, provider_names):
+    # Normalize common service names
+    def normalize(name):
+        name = name.lower()
+        replacements = {
+            "amazon prime video": "prime video",
+            "prime video amazon channel": "prime video",
+            "disney+ hotstar": "hotstar",
+            "disney plus hotstar": "hotstar",
+            "jio cinema": "jiocinema",
+            "hbo max": "max",
+            "apple tv plus": "apple tv",
+            "apple tv+": "apple tv"
+        }
+        for k, v in replacements.items():
+            name = name.replace(k, v)
+        return name.replace(" ", "").replace("+", "").replace("-", "")
+
+    normalized_subs = {normalize(s) for s in user_subs}
+    for p in provider_names:
+        norm_p = normalize(p)
+        if any(norm_p in s or s in norm_p for s in normalized_subs):
+            return True
+    return False
+
 # Direct REST implementation to bypass SDK versioning issues and support fallback
 def _call_gemini_rest(prompt: str, model_name: str = "gemini-1.5-flash"):
     if not settings.GEMINI_API_KEY:
         return None
         
-    # Fallback Chain: Use validated models from user's environment (2.0/2.5)
+    # Fallback Chain: Use validated models from user's environment
     candidates = [
-        "gemini-2.5-flash",       # Primary: Matches User's Quota (5/20 used)
-        "gemini-2.0-flash",       # Secondary
-        "gemini-2.0-flash-lite",  # Tertiary
-        "gemini-flash-latest",    # Backup
+        "gemini-3.1-flash-lite",  # Primary: Extremely fast 3.1 lite model, robust quota
+        "gemini-2.5-flash-lite",  # Secondary: Stable 2.5 lite model, robust quota
+        "gemini-2.5-flash",       # Tertiary: Standard flash model
+        "gemini-3.5-flash",       # Backup: Ultra-fast 3.5 flash
+        "gemini-2.0-flash",       # Fallback
+        "gemini-2.0-flash-lite",  # Fallback
         "gemini-pro-latest"       # Last Resort
     ]
     
@@ -41,8 +68,8 @@ def _call_gemini_rest(prompt: str, model_name: str = "gemini-1.5-flash"):
         
         try:
             logger.info(f"Attempting AI Generation with model: {model}...")
-            # Add Timeout to prevent infinite hangs (Increased to 60s for 2.x models)
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            # Set timeout to 45s to allow sufficient time for large JSON payload generation
+            response = requests.post(url, headers=headers, json=data, timeout=45)
             
             if response.status_code == 200:
                 logger.info(f"Success with model: {model}")
@@ -58,7 +85,7 @@ def _call_gemini_rest(prompt: str, model_name: str = "gemini-1.5-flash"):
                 last_error = f"Error {response.status_code}: {response.text}"
                 
         except requests.exceptions.Timeout:
-            logger.warning(f"Timeout (60s) on {model}. Trying next...")
+            logger.warning(f"Timeout (45s) on {model}. Trying next...")
             last_error = f"Timeout on {model}"
             
         except Exception as e:
@@ -185,22 +212,34 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
 
     # Enrich Picks and Filter Bad Ones
     if "picks" in data:
-        # First, enrich all picks
-        enriched_recs = []
-        for rec in data["picks"]:
-            _enrich_item(rec)
-            enriched_recs.append(rec)
+        # Pass country temporarily so the map executor can pick it up
+        for p in data["picks"]:
+            p["_country"] = country
+
+        # Enrich all picks in parallel to avoid sequential network delays
+        # Using 4 workers to prevent TMDB connection drop/rate limiting
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            list(executor.map(_enrich_item, data["picks"]))
 
         # Validated Enrichment: Only keep items that successfully found a match and poster
         # AND are not already in the user's watchlist (Hard Filter)
-        validated_recs = []
+        matched_recs = []
+        unmatched_recs = []
         seen_ids = set() # To prevent duplicates within the picks list itself
         
-        for r in enriched_recs:
+        user_sub_names = []
+        if active_subs:
+            if isinstance(active_subs[0], dict):
+                user_sub_names = [s['name'] for s in active_subs]
+            else:
+                user_sub_names = active_subs
+        
+        for r in data["picks"]:
             # Check 1: Must have ID and Poster
             if not r.get("tmdb_id") or not r.get("poster_path"):
                  continue
-                 
+                  
             # Check 2: Must NOT be in Watchlist (Plan to Watch, Watching, etc.)
             if r.get("tmdb_id") in watchlist_ids:
                  logger.info(f"Skipping Duplicate Recommendation: {r.get('title')} (ID: {r.get('tmdb_id')}) because it's in watchlist.")
@@ -216,17 +255,39 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
                 logger.info(f"Skipping Duplicate Recommendation: {r.get('title')} (ID: {r.get('tmdb_id')}) because it's already picked.")
                 continue
 
-            validated_recs.append(r)
+            # Check 5: Match watch providers if user has active subs
+            providers = r.get("providers", [])
+            if user_sub_names and providers:
+                if _is_provider_match(user_sub_names, providers):
+                    matched_recs.append(r)
+                else:
+                    unmatched_recs.append(r)
+            else:
+                unmatched_recs.append(r)
+                
             seen_ids.add(r.get("tmdb_id"))
             
-        data["picks"] = validated_recs[:6]
+        # Re-assemble picks: prioritize matched ones
+        logger.info(f"Subscription Filter: {len(matched_recs)} matched, {len(unmatched_recs)} unmatched.")
+        
+        # If we have at least 3 matched recommendations, strictly use only matched ones.
+        # Otherwise, merge and show matched first, fallback to unmatched so tab isn't empty.
+        if len(matched_recs) >= 3:
+            data["picks"] = matched_recs[:6]
+        else:
+            data["picks"] = (matched_recs + unmatched_recs)[:6]
             
     # Enrich Gaps and Filter Bad Ones
     if "gaps" in data:
+        # Enrich all gaps in parallel
+        # Using 3 workers to keep requests gentle
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            list(executor.map(_enrich_item, data["gaps"]))
+
         valid_gaps = []
         seen_ids = set()
         for gap in data["gaps"]:
-            _enrich_item(gap)
             tmdb_id = gap.get("tmdb_id")
             if tmdb_id and gap.get("poster_path"):
                  # Filter Out Watchlist/Ignored items for GAPS too
@@ -247,6 +308,7 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
 def _enrich_item(item):
     """Helper to add TMDB data to an item dict"""
     try:
+        country = item.pop("_country", "US")
         # Clean title for better matching (remove Season suffix)
         clean_title = re.sub(r':\s*Season\s+\d+|\s+Season\s+\d+', '', item['title'], flags=re.IGNORECASE).strip()
         
@@ -259,12 +321,40 @@ def _enrich_item(item):
              results = tmdb_client.search_multi(simple_title)
 
         if results.get('results'):
-            best = results['results'][0]
+            # Look for an exact match first (case-insensitive)
+            best = None
+            query_lower = clean_title.lower().strip()
+            
+            for candidate in results['results']:
+                cand_title = (candidate.get('title') or candidate.get('name') or '').lower().strip()
+                if cand_title == query_lower:
+                    best = candidate
+                    break
+            
+            # If no exact match, fall back to first result
+            if not best:
+                best = results['results'][0]
+                
             item['tmdb_id'] = best.get('id')
             item['media_type'] = best.get('media_type', 'movie') # Default to movie if unspecified, but API usually sends it
+            
+            # Synchronize title to avoid mismatched headings in UI
+            matched_title = best.get('title') or best.get('name')
+            if matched_title:
+                item['title'] = matched_title
+                
             item['poster_path'] = best.get('poster_path')
             item['vote_average'] = best.get('vote_average')
             item['overview'] = best.get('overview')
+
+            # Fetch watch providers for filtering
+            try:
+                providers_data = tmdb_client.get_watch_providers(item['media_type'], item['tmdb_id'], region=country)
+                flatrate = providers_data.get('flatrate', [])
+                item['providers'] = [p['provider_name'].lower().strip() for p in flatrate]
+            except Exception as e:
+                logger.warning(f"Failed to fetch watch providers for {clean_title}: {e}")
+                item['providers'] = []
 
             # Quality Check: If rating or overview is missing/incomplete, try fetching full details
             if not item['vote_average'] or not item['overview']:

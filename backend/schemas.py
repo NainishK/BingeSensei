@@ -162,6 +162,7 @@ class AIStrategyItem(BaseModel):
     service: str
     reason: str
     savings: Optional[float] = None
+    billing_cycle: Optional[str] = "monthly"
 
 class AIGapItem(BaseModel):
     title: str

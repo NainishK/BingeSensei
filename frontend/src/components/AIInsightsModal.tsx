@@ -461,7 +461,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                                         <p className={styles.strategyReason}>{item.reason}</p>
                                                                         {item.savings && item.action === 'Cancel' && (
                                                                             <span className={styles.savingsTag} style={{ color: '#166534', background: '#dcfce7', borderColor: '#86efac' }}>
-                                                                                Save {currencySymbol}{item.savings}/mo
+                                                                                Save {currencySymbol}{item.savings}{item.billing_cycle === 'yearly' ? '/yr' : '/mo'}
                                                                             </span>
                                                                         )}
                                                                     </div>
