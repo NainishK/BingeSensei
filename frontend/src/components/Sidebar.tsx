@@ -39,8 +39,13 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
 
     useEffect(() => {
         if (theme === 'system') {
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            setActiveTheme(isDark ? 'dark' : 'light');
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            const handleChange = (e: MediaQueryListEvent) => {
+                setActiveTheme(e.matches ? 'dark' : 'light');
+            };
+            setActiveTheme(mediaQuery.matches ? 'dark' : 'light');
+            mediaQuery.addEventListener('change', handleChange);
+            return () => mediaQuery.removeEventListener('change', handleChange);
         } else {
             setActiveTheme(theme as 'light' | 'dark');
         }
