@@ -1,42 +1,41 @@
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
-from pydantic import EmailStr
-from typing import List
+import resend
 from config import settings
+from typing import List
 import logging
+import asyncio
+from functools import partial
 
 logger = logging.getLogger(__name__)
 
-conf = ConnectionConfig(
-    MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
-    MAIL_FROM=settings.MAIL_FROM,
-    MAIL_PORT=settings.MAIL_PORT,
-    MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_STARTTLS=settings.MAIL_STARTTLS,
-    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
-    USE_CREDENTIALS=settings.USE_CREDENTIALS,
-    VALIDATE_CERTS=True
-)
+# Configure Resend API Key
+resend.api_key = settings.MAIL_PASSWORD
 
-async def send_email(subject: str, recipients: List[EmailStr], body: str):
+async def send_email(subject: str, recipients: List[str], body: str):
     """
-    Sends an email asynchronously using the configured SMTP server.
+    Sends an email asynchronously using the Resend API.
     """
-    if not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD:
-        logger.warning("Email credentials not configured. Skipping email send.")
+    if not resend.api_key:
+        logger.warning("Resend API key not configured. Skipping email send.")
         return
 
-    message = MessageSchema(
-        subject=subject,
-        recipients=recipients,
-        body=body,
-        subtype=MessageType.html
-    )
-
-    fm = FastMail(conf)
     try:
-        await fm.send_message(message)
-        logger.info(f"Email sent successfully to {recipients}")
+        # Normalize recipients to list
+        to_recipients = list(recipients)
+        
+        params = {
+            "from": settings.MAIL_FROM or "onboarding@resend.dev",
+            "to": to_recipients,
+            "subject": subject,
+            "html": body
+        }
+        
+        # Run the synchronous SDK send call in a thread pool to avoid blocking FastAPI's event loop
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, 
+            partial(resend.Emails.send, params)
+        )
+        logger.info(f"Email sent successfully to {to_recipients}")
     except Exception as e:
-        logger.error(f"Failed to send email: {e}")
+        logger.error(f"Failed to send email via Resend: {e}")
         raise e

@@ -47,16 +47,27 @@ async def forgot_password(
     <h1>Password Reset Request</h1>
     <p>You requested a password reset for your BingeSensei account.</p>
     <p>Click the link below to reset your password:</p>
-    <a href="{reset_link}">Reset Password</a>
+    <p><a href="{reset_link}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Reset Password</a></p>
+    <br/>
+    <p>If the button above does not work, copy and paste this URL into your browser:</p>
+    <p style="word-break: break-all; color: #4f46e5; background-color: #f1f5f9; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.9rem;">{reset_link}</p>
+    <br/>
     <p>This link expires in 1 hour.</p>
     <p>If you did not request this, please ignore this email.</p>
     """
     
-    await email_client.send_email(
-        subject="Reset Your Password - BingeSensei",
-        recipients=[user.email],
-        body=email_body
-    )
+    try:
+        await email_client.send_email(
+            subject="Reset Your Password - BingeSensei",
+            recipients=[user.email],
+            body=email_body
+        )
+    except Exception as e:
+        logger.error(f"Error sending password reset email to {user.email}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to send password reset email: {str(e)}"
+        )
     
     return {"message": "If this email is registered, you will receive a password reset link."}
 
