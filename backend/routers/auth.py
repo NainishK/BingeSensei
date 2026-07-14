@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 import models, schemas, crud, security, email_client
 from database import get_db # Assuming get_db is available or I need to import it
 from dependencies import get_db, get_current_user
+from config import settings
 import logging
 import sys
 
@@ -69,8 +70,6 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    crud.update_user_password(db, user_id=user.id, new_password=request.new_password)
-    
     crud.update_user_password(db, user_id=user.id, new_password=request.new_password)
     
     return {"message": "Password reset successfully"}
