@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # GitHub Issues (Bug Reporting)
     GITHUB_PAT: str = ""
     GITHUB_REPO: str = "NainishK/SmartSubs"
+    
+    # Security Key for automated tasks/cron jobs
+    CRON_SECURITY_KEY: str = "super_secret_cron_key_default"
 
 
 

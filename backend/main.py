@@ -16,8 +16,9 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # Include Routers
-from routers import auth
+from routers import auth, notifications
 app.include_router(auth.router)
+app.include_router(notifications.router)
 
 # [NEW] Logging Middleware
 @app.middleware("http")

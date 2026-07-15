@@ -339,6 +339,73 @@ export default function Profile() {
                                     />
                                     <p className={styles.helperText}>Genres or content types you never want recommended.</p>
                                 </div>
+
+                                {/* Notification Settings */}
+                                <div className={styles.inputGroup} style={{ marginTop: '2rem' }}>
+                                    <label className={styles.label}>Notification Settings</label>
+                                    <p className={styles.helperText} style={{ marginBottom: '1rem' }}>
+                                        Toggle how and when you want to receive alerts about your subscriptions.
+                                    </p>
+                                    <div className={styles.checkboxGroup}>
+                                        <label className={styles.checkboxLabel}>
+                                            <input
+                                                type="checkbox"
+                                                checked={preferences.enable_email_renewals || false}
+                                                onChange={e => setPreferences({ ...preferences, enable_email_renewals: e.target.checked })}
+                                                className={styles.checkboxInput}
+                                            />
+                                            <div className={styles.checkboxTextWrapper}>
+                                                <span className={styles.checkboxTitle}>Email: Renewal Reminders</span>
+                                                <span className={styles.checkboxDescription}>Receive consolidated emails 7 days and 1 day before your subscriptions renew.</span>
+                                            </div>
+                                        </label>
+
+                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={false}
+                                                disabled
+                                                className={styles.checkboxInput}
+                                            />
+                                            <div className={styles.checkboxTextWrapper}>
+                                                <span className={styles.checkboxTitle}>
+                                                    Email: AI Strategy & Insights <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                </span>
+                                                <span className={styles.checkboxDescription}>Receive monthly email reports with smart budget strategies and recommendations.</span>
+                                            </div>
+                                        </label>
+
+                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={false}
+                                                disabled
+                                                className={styles.checkboxInput}
+                                            />
+                                            <div className={styles.checkboxTextWrapper}>
+                                                <span className={styles.checkboxTitle}>
+                                                    Push: Renewal Reminders <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                </span>
+                                                <span className={styles.checkboxDescription}>Receive browser/mobile push notifications when a service is renewing soon.</span>
+                                            </div>
+                                        </label>
+
+                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={false}
+                                                disabled
+                                                className={styles.checkboxInput}
+                                            />
+                                            <div className={styles.checkboxTextWrapper}>
+                                                <span className={styles.checkboxTitle}>
+                                                    Push: AI Recommendations <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                </span>
+                                                <span className={styles.checkboxDescription}>Get notified immediately when new curator picks or deals are found for your library.</span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
                             <button
