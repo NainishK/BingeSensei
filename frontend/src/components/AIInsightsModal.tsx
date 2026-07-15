@@ -265,7 +265,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                 <TrendingUp size={18} /> Smart Strategy
                             </button>
                             <button
-                                className={`${styles.tabBtn}`}
+                                className={`${styles.tabBtn} ${styles.refreshTab}`}
                                 onClick={() => handleGenerate(true)}
                                 disabled={!hasData || loading}
                                 title={loading ? 'Analyzing Library...' : 'Refresh Intelligence'}
@@ -276,7 +276,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                             </button>
                             <Link
                                 href="/profile"
-                                className={styles.tabBtn}
+                                className={`${styles.tabBtn} ${styles.profileTab}`}
                                 style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.4rem', textDecoration: 'none', fontSize: '0.82rem', opacity: 0.75 }}
                                 onClick={onClose}
                                 title="Edit viewing preferences"

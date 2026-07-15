@@ -19,6 +19,18 @@
     grid-template-columns: 1fr 350px;
     gap: 2.5rem;
     align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+}
+
+.leftColumn {
+    width: 100%;
+    min-width: 0;
+}
+
+.rightColumn {
+    width: 100%;
+    min-width: 0;
 }
 
 @media (max-width: 1024px) {
@@ -172,6 +184,8 @@
     color: var(--primary);
     letter-spacing: 0.5px;
     border: 1px solid rgba(59, 130, 246, 0.2);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .subBody {
@@ -935,38 +949,46 @@ select.input {
 /* Mobile Typography & Layout Overrides */
 @media (max-width: 768px) {
     .container {
-        padding: 1rem;
-        /* Tighter padding */
+        padding: 0;
+        /* Rely on main layout's 1rem padding for a wider, cleaner layout */
     }
 
     .pageTitle {
         font-size: 1.5rem;
         margin-bottom: 1rem;
-        /* Increased back to 1rem per user request */
     }
 
     .header {
         margin-bottom: 0.5rem;
-        /* Reduced */
         flex-direction: column;
         gap: 0.25rem;
     }
 
-    /* Reduce Whitespace between sections */
     .mobileTabs {
         margin-bottom: 0.5rem;
-        /* Reduced from 1rem */
         padding: 2px;
     }
 
+    .filtersWrapper {
+        padding: 1rem;
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+        border-radius: 12px;
+    }
+
     .filterContainer {
-        margin-bottom: 1rem;
-        /* Reduced from 1.5rem */
+        margin-bottom: 0.5rem;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .subGrid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem;
     }
 
     .categorySection {
         margin-bottom: 2rem;
-        /* Reduced from 3rem */
     }
 
     .categoryTitle {
@@ -974,24 +996,20 @@ select.input {
         margin-bottom: 0.75rem;
     }
 
-    /* Compact Cards */
     .subCard {
         padding: 1.25rem;
     }
 
     .serviceName {
         font-size: 1rem;
-        /* Reduced from 1.1rem */
     }
 
     .costValue {
         font-size: 1.5rem;
-        /* Reduced from 1.75rem */
     }
 
     .sectionTitle {
         font-size: 1.2rem;
-        /* Reduced from 1.4rem */
     }
 
     .addSection {
@@ -1091,6 +1109,8 @@ select.input {
     color: #ef4444;
     letter-spacing: 0.5px;
     border: 1px solid rgba(239, 68, 68, 0.2);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .badgeDueSoon {
@@ -1103,6 +1123,8 @@ select.input {
     color: #f59e0b;
     letter-spacing: 0.5px;
     border: 1px solid rgba(245, 158, 11, 0.3);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .badgeActive {
@@ -1115,6 +1137,8 @@ select.input {
     color: #10b981;
     letter-spacing: 0.5px;
     border: 1px solid rgba(16, 185, 129, 0.2);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .cardOverdue {
@@ -1189,6 +1213,9 @@ select.input {
     padding: 1.25rem;
     border-radius: 16px;
     border: 1px solid var(--border);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 :global([data-theme='dark']) .filtersWrapper {
@@ -1199,6 +1226,8 @@ select.input {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
+    min-width: 0;
 }
 
 @media (max-width: 576px) {
@@ -1220,7 +1249,10 @@ select.input {
 
 .filtersWrapper .filterContainer {
     margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
+    padding-bottom: 4px !important;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .activeOverduePill {
