@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 import styles from './subscriptions.module.css';
 import { Subscription, Service, Plan } from '@/lib/types';
-import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign } from 'lucide-react';
+import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw } from 'lucide-react';
 import { useRecommendations } from '@/context/RecommendationsContext';
 import { formatCurrency, getCurrencySymbol } from '@/lib/currency';
 import DatePicker from "react-datepicker";
@@ -248,6 +248,50 @@ export default function SubscriptionsPage() {
         }
     };
 
+    const handleQuickRenew = async (sub: Subscription) => {
+        try {
+            const currentDate = new Date(sub.next_billing_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let newDate = new Date(currentDate);
+
+            // Advance by at least one cycle first (e.g. for "due soon" subscriptions that are already in the future)
+            if (sub.billing_cycle === 'yearly') {
+                newDate.setFullYear(newDate.getFullYear() + 1);
+            } else {
+                newDate.setMonth(newDate.getMonth() + 1);
+            }
+            
+            // Loop to continue advancing the date until it is strictly in the future relative to today
+            while (newDate <= today) {
+                if (sub.billing_cycle === 'yearly') {
+                    newDate.setFullYear(newDate.getFullYear() + 1);
+                } else {
+                    newDate.setMonth(newDate.getMonth() + 1);
+                }
+            }
+
+            const formattedDate = newDate.toISOString().split('T')[0];
+
+            await api.put(`/subscriptions/${sub.id}`, {
+                service_name: sub.service_name,
+                cost: sub.cost,
+                currency: sub.currency,
+                billing_cycle: sub.billing_cycle,
+                category: sub.category || 'OTT',
+                start_date: sub.start_date,
+                next_billing_date: formattedDate,
+                country: userCountry
+            });
+
+            fetchSubscriptions();
+            refreshRecommendations();
+        } catch (error) {
+            console.error('Failed to quick renew subscription', error);
+        }
+    };
+
 
 
     if (loading) return <div className={styles.loading}>Loading your subscriptions...</div>;
@@ -327,46 +371,82 @@ export default function SubscriptionsPage() {
                                                 <section key={cat.id} className={styles.categorySection}>
                                                     <h2 className={styles.categoryTitle}>{cat.title}</h2>
                                                     <div className={styles.subGrid}>
-                                                        {catSubs.map((sub) => (
-                                                            <div key={sub.id} className={styles.subCard}>
-                                                                <div className={styles.subHeader}>
-                                                                    <div className={styles.serviceIdentity}>
-                                                                        <ServiceIcon
-                                                                            name={sub.service_name}
-                                                                            logoUrl={sub.logo_url}
-                                                                            className={styles.serviceLogo}
-                                                                            fallbackClassName={styles.fallbackLogo}
-                                                                        />
-                                                                        <h3 className={styles.serviceName}>{sub.service_name}</h3>
-                                                                    </div>
-                                                                    <span className={styles.statusBadge}>Active</span>
-                                                                </div>
+                                                        {catSubs.map((sub) => {
+                                                            const billingDate = new Date(sub.next_billing_date);
+                                                            const today = new Date();
+                                                            today.setHours(0, 0, 0, 0);
 
-                                                                <div className={styles.subBody}>
-                                                                    <div className={styles.costSection}>
-                                                                        <p className={styles.costValue}>{formatCurrency(sub.cost, userCountry)}</p>
-                                                                        <span className={styles.billingPeriod}>per {sub.billing_cycle === 'monthly' ? 'month' : 'year'}</span>
+                                                            const diffTime = billingDate.getTime() - today.getTime();
+                                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                                            let cardClass = styles.subCard;
+                                                            let statusText = 'Active';
+                                                            let statusClass = styles.badgeActive;
+                                                            let dateClass = styles.detailValue;
+                                                            let isOverdue = false;
+                                                            let isDueSoon = false;
+
+                                                            if (diffDays < 0) {
+                                                                cardClass = `${styles.subCard} ${styles.cardOverdue}`;
+                                                                statusText = 'Renewal Due';
+                                                                statusClass = styles.badgeOverdue;
+                                                                dateClass = `${styles.detailValue} ${styles.detailValueOverdue}`;
+                                                                isOverdue = true;
+                                                            } else if (diffDays <= 7) {
+                                                                cardClass = `${styles.subCard} ${styles.cardDueSoon}`;
+                                                                statusText = 'Due Soon';
+                                                                statusClass = styles.badgeDueSoon;
+                                                                dateClass = `${styles.detailValue} ${styles.detailValueDueSoon}`;
+                                                                isDueSoon = true;
+                                                            }
+
+                                                            return (
+                                                                <div key={sub.id} className={cardClass}>
+                                                                    <div className={styles.subHeader}>
+                                                                        <div className={styles.serviceIdentity}>
+                                                                            <ServiceIcon
+                                                                                name={sub.service_name}
+                                                                                logoUrl={sub.logo_url}
+                                                                                className={styles.serviceLogo}
+                                                                                fallbackClassName={styles.fallbackLogo}
+                                                                            />
+                                                                            <h3 className={styles.serviceName}>{sub.service_name}</h3>
+                                                                        </div>
+                                                                        <span className={statusClass}>{statusText}</span>
                                                                     </div>
 
-                                                                    <div className={styles.billingDetail}>
-                                                                        <div className={styles.detailItem}>
-                                                                            <span className={styles.detailLabel}>Next Bill</span>
-                                                                            <span className={styles.detailValue}>{new Date(sub.next_billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                    <div className={styles.subBody}>
+                                                                        <div className={styles.costSection}>
+                                                                            <p className={styles.costValue}>{formatCurrency(sub.cost, userCountry)}</p>
+                                                                            <span className={styles.billingPeriod}>per {sub.billing_cycle === 'monthly' ? 'month' : 'year'}</span>
+                                                                        </div>
+
+                                                                        <div className={styles.billingDetail}>
+                                                                            <div className={styles.detailItem}>
+                                                                                <span className={styles.detailLabel}>Next Bill</span>
+                                                                                <span className={dateClass}>{new Date(sub.next_billing_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
 
-                                                                <div className={styles.subFooter}>
-                                                                    <button onClick={() => handleEditClick(sub)} className={styles.editBtn}>
-                                                                        <Edit2 size={14} />
-                                                                        Edit
-                                                                    </button>
-                                                                    <button onClick={() => openDeleteModal(sub)} className={styles.deleteBtn}>
-                                                                        Cancel
-                                                                    </button>
+                                                                    <div className={styles.subFooter}>
+                                                                        {(isOverdue || isDueSoon) && (
+                                                                            <button onClick={() => handleQuickRenew(sub)} className={styles.renewBtn} title="Quickly roll billing date to next cycle">
+                                                                                <RefreshCw size={12} />
+                                                                                Renew
+                                                                            </button>
+                                                                        )}
+                                                                        <button onClick={() => handleEditClick(sub)} className={styles.editBtn}>
+                                                                            <Edit2 size={14} />
+                                                                            Edit
+                                                                        </button>
+                                                                        <button onClick={() => openDeleteModal(sub)} className={styles.deleteBtn}>
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </section>
                                             );

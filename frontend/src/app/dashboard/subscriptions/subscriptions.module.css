@@ -1076,3 +1076,102 @@ select.input {
 :global(.react-datepicker) * {
     transition: none !important;
 }
+
+/* =========================================
+   DYNAMIC EXPIRY & RENEWAL STYLING
+   ========================================= */
+
+.badgeOverdue {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.badgeDueSoon {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badgeActive {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.cardOverdue {
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    background: linear-gradient(180deg, var(--card) 0%, rgba(239, 68, 68, 0.015) 100%) !important;
+}
+
+.cardOverdue:hover {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+.cardDueSoon {
+    border-color: rgba(245, 158, 11, 0.3) !important;
+    background: linear-gradient(180deg, var(--card) 0%, rgba(245, 158, 11, 0.02) 100%) !important;
+}
+
+.cardDueSoon:hover {
+    border-color: rgba(245, 158, 11, 0.5) !important;
+}
+
+.renewBtn {
+    background: transparent;
+    color: #10b981;
+    border: 1px solid #10b981;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.renewBtn:hover {
+    background: rgba(16, 185, 129, 0.08);
+}
+
+:global([data-theme='dark']) .renewBtn:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.renewBtn svg {
+    transition: transform 0.3s ease;
+}
+
+.renewBtn:hover svg {
+    transform: rotate(180deg);
+}
+
+.detailValueOverdue {
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+}
+
+.detailValueDueSoon {
+    color: #f59e0b !important;
+    font-weight: 700 !important;
+}
