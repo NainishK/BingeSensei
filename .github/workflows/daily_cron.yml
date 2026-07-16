@@ -1,0 +1,23 @@
+name: Trigger Daily Subscription Renewals
+
+on:
+  schedule:
+    # Runs at 00:00 UTC (05:30 AM IST) every day
+    - cron: '0 0 * * *'
+  # Allows manual triggers from the GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  trigger-renewals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Renewal Endpoint
+        run: |
+          if [ -z "${{ secrets.BACKEND_URL }}" ]; then
+            echo "Error: BACKEND_URL secret is not set in GitHub Secrets."
+            exit 1
+          fi
+          
+          curl -f -X POST "${{ secrets.BACKEND_URL }}/notifications/check-renewals" \
+            -H "X-Cron-Security-Key: ${{ secrets.CRON_SECURITY_KEY }}" \
+            -H "Content-Length: 0"
