@@ -26,7 +26,8 @@ def get_cached_data(db: Session, user_id: int, category: str, ttl_hours: int = 2
     ).first()
 
     if cache_entry and cache_entry.updated_at:
-        age = datetime.utcnow() - cache_entry.updated_at
+        updated_at = cache_entry.updated_at.replace(tzinfo=None) if cache_entry.updated_at.tzinfo else cache_entry.updated_at
+        age = datetime.utcnow() - updated_at
         if age < timedelta(hours=ttl_hours):
             try:
                 return json.loads(cache_entry.data)
@@ -89,8 +90,11 @@ def refresh_recommendations(db: Session, user_id: int, force: bool = False, cate
                     models.RecommendationCache.user_id == user_id,
                     models.RecommendationCache.category == cache_key
                 ).first()
-                if not cache_entry or not cache_entry.updated_at or \
-                   (datetime.utcnow() - cache_entry.updated_at > timedelta(hours=24)):
+                if cache_entry and cache_entry.updated_at:
+                    updated_at = cache_entry.updated_at.replace(tzinfo=None) if cache_entry.updated_at.tzinfo else cache_entry.updated_at
+                    if datetime.utcnow() - updated_at > timedelta(hours=24):
+                        should_refresh = True
+                else:
                     should_refresh = True
             
             if should_refresh:
@@ -107,8 +111,11 @@ def refresh_recommendations(db: Session, user_id: int, force: bool = False, cate
                     models.RecommendationCache.user_id == user_id,
                     models.RecommendationCache.category == cache_key
                 ).first()
-                if not cache_entry or not cache_entry.updated_at or \
-                   (datetime.utcnow() - cache_entry.updated_at > timedelta(hours=24)):
+                if cache_entry and cache_entry.updated_at:
+                    updated_at = cache_entry.updated_at.replace(tzinfo=None) if cache_entry.updated_at.tzinfo else cache_entry.updated_at
+                    if datetime.utcnow() - updated_at > timedelta(hours=24):
+                        should_refresh = True
+                else:
                     should_refresh = True
             
             if should_refresh:
