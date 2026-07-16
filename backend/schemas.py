@@ -124,6 +124,12 @@ class UserPreferences(BaseModel):
     viewing_style: Optional[str] = None # New: Binge, Weekly, Casual
     devices: Optional[List[str]] = None
     deal_breakers: Optional[List[str]] = None
+    
+    # Notification Settings (default to False as per user request)
+    enable_email_renewals: Optional[bool] = False
+    enable_email_insights: Optional[bool] = False
+    enable_push_renewals: Optional[bool] = False
+    enable_push_insights: Optional[bool] = False
 
     class Config:
         extra = "allow"
