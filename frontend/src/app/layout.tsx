@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     description: "Track renewal dates, calculate monthly spend, and match your watchlist with content available on your active subscriptions.",
     images: [
       {
-        url: "/screenshots/subscriptions.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "BingeSensei Dashboard Preview",
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "BingeSensei - Smart OTT Subscription & Watchlist Manager",
     description: "Track renewal dates, calculate monthly spend, and match your watchlist with content available on your active subscriptions.",
-    images: ["/screenshots/subscriptions.png"],
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
