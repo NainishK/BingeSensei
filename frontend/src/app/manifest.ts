@@ -5,9 +5,9 @@ export default function manifest(): MetadataRoute.Manifest {
         name: 'BingeSensei',
         short_name: 'BingeSensei',
         description: 'Track, Manage, and Discover content across all your services.',
-        start_url: '/dashboard',
+        start_url: '/',
         display: 'standalone',
-        background_color: '#ffffff',
+        background_color: '#0f172a',
         theme_color: '#0f172a',
         icons: [
             {
