@@ -16,7 +16,7 @@ if not SQLALCHEMY_DATABASE_URL:
     connect_args = {"check_same_thread": False}
 else:
     # Cloud (Postgres)
-    # Fix for Render/Heroku which often use 'postgres://' which SQLAlchemy deprecated
+    # Fix for Railway/Heroku which often use 'postgres://' which SQLAlchemy deprecated
     # Also handle accidental quotes or whitespace from copy-pasting
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.strip().strip('"').strip("'")
     
@@ -29,7 +29,7 @@ else:
         
     connect_args = {} # Postgres does not need check_same_thread
 
-# Pool settings for cloud Postgres (Neon/Render)
+# Pool settings for cloud Postgres (Neon/Railway)
 # pool_pre_ping: Tests connection before use - catches stale SSL connections after cold starts
 # pool_recycle: Recycles connections every 5 min - prevents SSL timeouts
 # pool_size/max_overflow: Keep small for free-tier resource limits

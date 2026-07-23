@@ -422,7 +422,7 @@ Each section renders a horizontal scrollable row of `MediaCard` components.
 
 **Configuration:**
 - Base URL from `NEXT_PUBLIC_API_URL` env var
-- 2-minute timeout (handles Render free-tier cold starts)
+- 2-minute timeout (handles cloud container cold starts)
 - Auto-attaches JWT from localStorage on every request
 - Auto-redirects to `/login` on 401 responses (unless `_silentAuth` flag set)
 - Strips trailing slash from base URL

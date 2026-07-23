@@ -39,7 +39,7 @@ SmartSubs is a **subscription management + watchlist tracking** app. Users can:
 | **AI** | Google Gemini 1.5 Flash (REST API) |
 | **Media Data** | TMDB API (movies, TV, providers) |
 | **Auth** | JWT tokens + Google OAuth 2.0 |
-| **Hosting** | Vercel (frontend), Render (backend) |
+| **Hosting** | Vercel (frontend), Railway (backend) |
 | **Bug Reports** | GitHub Issues API |
 
 ---
