@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # GitHub Issues (Bug Reporting)
     GITHUB_PAT: str = ""
-    GITHUB_REPO: str = "NainishK/SmartSubs"
+    GITHUB_REPO: str = "NainishK/BingeSensei"
     
     # Environment & Security
     ENVIRONMENT: str = "development"
