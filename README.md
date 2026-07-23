@@ -1,10 +1,10 @@
-# 💎 Smart Subscription Manager
+# 💎 BingeSensei
 
 **AI-Powered Optimization for Your Streaming Life.**
 
 ![Dashboard Overview](frontend/public/screenshots/overview.png)
 
-Stop wasting money on unused subscriptions. Subscription Manager helps you track your spending, discover what to watch on the services you already own, and uses AI to optimize your streaming portfolio.
+Stop wasting money on unused subscriptions. **BingeSensei** helps you track your spending, discover what to watch on the services you already own, and uses AI to optimize your streaming portfolio.
 
 ## ✨ Key Features
 

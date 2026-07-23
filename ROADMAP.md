@@ -1,6 +1,6 @@
-# Roadmap — SmartSubs
+# Roadmap — BingeSensei
 
-Future features and improvements planned for SmartSubs.
+Future features and improvements planned for BingeSensei.
 
 ---
 
@@ -12,7 +12,7 @@ Import and export your watchlist to/from various platforms and formats.
 **Phase 1 (MVP):**
 - [ ] Export watchlist as CSV
 - [ ] Export watchlist as JSON
-- [ ] Import from SmartSubs CSV/JSON (re-import)
+- [ ] Import from BingeSensei CSV/JSON (re-import)
 - [ ] Import from IMDb CSV (via TMDB ID lookup)
 
 **Phase 2:**

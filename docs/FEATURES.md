@@ -1,6 +1,6 @@
-# SmartSubs Features (Codebase Verified)
+# BingeSensei Features (Codebase Verified)
 
-A completely accurate, codebase-verified list of features active in SmartSubs.
+A completely accurate, codebase-verified list of features active in BingeSensei.
 
 ---
 
