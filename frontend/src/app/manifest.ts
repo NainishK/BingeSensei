@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next';
 export default function manifest(): MetadataRoute.Manifest {
     return {
         name: 'BingeSensei',
-        short_name: 'BingeSensei',
+        short_name: 'Binge Sensei',
         description: 'Track, Manage, and Discover content across all your services.',
         start_url: '/',
         display: 'standalone',
