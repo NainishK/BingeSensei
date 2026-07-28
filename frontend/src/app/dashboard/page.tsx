@@ -268,6 +268,21 @@ export default function DashboardOverview() {
 
 
     useEffect(() => {
+        // 1. Instantly load cached dashboard data if available (<50ms render)
+        try {
+            const cached = localStorage.getItem('binge_dash_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.user) setUser(parsed.user);
+                if (parsed.stats) setStats(parsed.stats);
+                if (parsed.spendingDist) setSpendingDist(parsed.spendingDist);
+                if (parsed.watchlist) setWatchlist(parsed.watchlist);
+            }
+        } catch (e) {
+            /* ignore cache parse error */
+        }
+
+        // 2. Silently fetch fresh data in background and update UI + cache
         const fetchData = async () => {
             try {
                 const [userRes, statsRes, spendingRes, watchlistRes] = await Promise.all([
@@ -276,16 +291,25 @@ export default function DashboardOverview() {
                     api.get('/users/me/spending'),
                     api.get('/watchlist/')
                 ]);
+
                 setUser(userRes.data);
                 setStats(statsRes.data);
-                setSpendingDist(spendingRes.data); // Assuming spendingRes.data is the spending distribution
+                setSpendingDist(spendingRes.data);
                 setWatchlist(watchlistRes.data);
+
+                // Save fresh snapshot to cache
+                localStorage.setItem('binge_dash_cache', JSON.stringify({
+                    user: userRes.data,
+                    stats: statsRes.data,
+                    spendingDist: spendingRes.data,
+                    watchlist: watchlistRes.data,
+                    timestamp: Date.now()
+                }));
             } catch (error) {
                 console.error("Failed to fetch dashboard data", error);
             }
         };
         fetchData();
-        // Recs are handled by context
     }, []);
 
 
