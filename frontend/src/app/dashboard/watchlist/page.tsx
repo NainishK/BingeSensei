@@ -11,6 +11,7 @@ import styles from './watchlist.module.css';
 import { STATUS_COLORS, ALL_TAB_CONFIG } from '@/lib/statusColors';
 import GenreFilter from './GenreFilter';
 import CustomSelect from '@/components/CustomSelect';
+import { WatchlistSkeleton } from '@/components/SkeletonLoader';
 
 export default function WatchlistPage() {
     const router = useRouter();
@@ -37,6 +38,16 @@ export default function WatchlistPage() {
     const [userServices, setUserServices] = useState<Set<string>>(new Set()); // Store active subscription names
 
     useEffect(() => {
+        // 1. Instantly load cached watchlist if available (<50ms)
+        try {
+            const cached = localStorage.getItem('binge_watchlist_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.items) setItems(parsed.items);
+                setLoading(false);
+            }
+        } catch (e) { /* ignore */ }
+
         fetchWatchlist();
         fetchSubscriptions();
     }, []);
@@ -135,6 +146,12 @@ export default function WatchlistPage() {
 
             setItems(transformed);
             if (!isBackground) setLoading(false); // Only toggle if we touched it
+
+            // Save fresh snapshot to cache
+            localStorage.setItem('binge_watchlist_cache', JSON.stringify({
+                items: transformed,
+                timestamp: Date.now()
+            }));
 
             // Secondary fetch removed: relying on robust DB data from backfill
             // to avoid overwriting valid badges with incomplete availability checks.
@@ -256,7 +273,7 @@ export default function WatchlistPage() {
 
 
 
-    if (loading) return <div className={styles.loading}>Loading your watchlist...</div>;
+    if (loading) return <WatchlistSkeleton />;
 
     return (
         <div className={styles.container}>

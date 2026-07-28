@@ -12,6 +12,7 @@ import AIInsightsModal from '@/components/AIInsightsModal';
 import { formatCurrency } from '@/lib/currency';
 
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { RecommendationsSkeleton } from '@/components/SkeletonLoader';
 
 // ... (imports)
 
@@ -128,11 +129,7 @@ export default function RecommendationsPage() {
     const trendingRecs = dashboardRecs.filter(r => r.type === 'trending');
     const cancelRecs = dashboardRecs.filter(r => r.type === 'cancel' && r.service_name !== 'YouTube Premium');
 
-    if (loadingDashboard && dashboardRecs.length === 0) return (
-        <div className={styles.container}>
-            <div className={styles.emptyState}>Loading recommendations...</div>
-        </div>
-    );
+    if (loadingDashboard && dashboardRecs.length === 0) return <RecommendationsSkeleton />;
 
     return (
         <div className={styles.container}>

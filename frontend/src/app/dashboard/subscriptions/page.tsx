@@ -11,6 +11,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { ServiceIcon } from '@/components/ServiceIcon';
 import CustomSelect from '@/components/CustomSelect';
+import { SubscriptionsSkeleton } from '@/components/SkeletonLoader';
 
 
 
@@ -52,6 +53,18 @@ export default function SubscriptionsPage() {
     const dateInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        // 1. Instantly load cached subscriptions if available (<50ms)
+        try {
+            const cached = localStorage.getItem('binge_subs_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.subscriptions) setSubscriptions(parsed.subscriptions);
+                if (parsed.services) setServices(parsed.services);
+                if (parsed.userCountry) setUserCountry(parsed.userCountry);
+                setLoading(false);
+            }
+        } catch (e) { /* ignore */ }
+
         fetchData();
 
         // Handle Resize
@@ -110,6 +123,14 @@ export default function SubscriptionsPage() {
 
             setSubscriptions(subsRes.data);
             setServices(servicesRes.data);
+
+            // Save fresh snapshot to cache
+            localStorage.setItem('binge_subs_cache', JSON.stringify({
+                subscriptions: subsRes.data,
+                services: servicesRes.data,
+                userCountry: country,
+                timestamp: Date.now()
+            }));
 
         } catch (error) {
             console.error('Failed to fetch data', error);
@@ -315,7 +336,7 @@ export default function SubscriptionsPage() {
 
     const hasActiveFilters = filterCategory !== 'ALL' || filterStatus !== 'ALL';
 
-    if (loading) return <div className={styles.loading}>Loading your subscriptions...</div>;
+    if (loading) return <SubscriptionsSkeleton />;
 
     return (
         <div className={styles.container}>
