@@ -401,6 +401,18 @@ async def startup_event():
     except Exception as e:
         logger.error(f"❌ Schema Migration Failed: {e}")
 
+    # Auto-seed regional service templates if not present
+    try:
+        import scripts.seed_data as seed_script
+        db = SessionLocal()
+        gb_count = db.query(models.Service).filter(models.Service.country == "GB").count()
+        if gb_count == 0:
+            logger.info("🌱 Seeding regional service templates (US, IN, GB, DE, CA, AU, JP)...")
+            seed_script.seed_data()
+        db.close()
+    except Exception as e:
+        logger.error(f"❌ Regional Seeding Failed: {e}")
+
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     logger.info(f"👉 Signup Request for: {user.email}") # [MODIFIED]

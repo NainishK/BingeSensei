@@ -12,7 +12,8 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 # If DATABASE_URL is not set, fallback to local SQLite
 if not SQLALCHEMY_DATABASE_URL:
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sql_app.db")
+    SQLALCHEMY_DATABASE_URL = f"sqlite:///{db_path}"
     connect_args = {"check_same_thread": False}
 else:
     # Cloud (Postgres)

@@ -12,7 +12,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import ReportIssueModal from '@/components/ReportIssueModal';
 import CustomSelect from '@/components/CustomSelect';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { COUNTRY_CURRENCY_MAP } from '@/lib/currency';
+import { COUNTRY_CURRENCY_MAP, COUNTRY_OPTIONS } from '@/lib/currency';
 
 interface UserData {
     id: number;
@@ -94,6 +94,10 @@ export default function Profile() {
         setMessage('');
         try {
             await api.put('/users/profile', { country });
+            // Clear regional caches so UI renders fresh country data
+            localStorage.removeItem('binge_subs_cache');
+            localStorage.removeItem('binge_dash_cache');
+            localStorage.removeItem('binge_watchlist_cache');
             setMessage('Settings saved!');
             setTimeout(() => setMessage(''), 3000);
             if (user) setUser({ ...user, country });
@@ -224,10 +228,7 @@ export default function Profile() {
                                     <label htmlFor="country" className={styles.label}>Country / Region</label>
                                     <CustomSelect
                                         value={country}
-                                        options={[
-                                            { value: 'US', label: '🇺🇸 United States (US)' },
-                                            { value: 'IN', label: '🇮🇳 India (IN)' }
-                                        ]}
+                                        options={COUNTRY_OPTIONS}
                                         onChange={(val) => setCountry(val as string)}
                                         className={styles.select}
                                     />

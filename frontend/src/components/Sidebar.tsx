@@ -15,6 +15,7 @@ import {
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '@/context/ThemeContext';
 import ConfirmationModal from './ConfirmationModal';
+import { COUNTRY_FLAG_MAP } from '@/lib/currency';
 import styles from './Sidebar.module.css';
 
 interface SidebarProps {
@@ -52,10 +53,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
     }, [theme]);
 
     const getFlag = (code: string) => {
-        const flags: Record<string, string> = {
-            'US': '🇺🇸', 'IN': '🇮🇳', 'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺'
-        };
-        return flags[code] || '🌍';
+        return COUNTRY_FLAG_MAP[code] || '🌍';
     };
 
     const getCountryName = (code: string) => {
@@ -64,7 +62,18 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
             'IN': 'India',
             'GB': 'United Kingdom',
             'CA': 'Canada',
-            'AU': 'Australia'
+            'AU': 'Australia',
+            'DE': 'Germany',
+            'FR': 'France',
+            'ES': 'Spain',
+            'IT': 'Italy',
+            'NL': 'Netherlands',
+            'JP': 'Japan',
+            'SG': 'Singapore',
+            'PH': 'Philippines',
+            'NZ': 'New Zealand',
+            'BR': 'Brazil',
+            'MX': 'Mexico',
         };
         return names[code] || code;
     };

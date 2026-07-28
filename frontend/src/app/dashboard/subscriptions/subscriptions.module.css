@@ -1294,4 +1294,77 @@ select.input {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 112, 243, 0.2);
 }
+
+/* Custom Floating Tooltip Popover */
+.tooltipContainer {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    margin-left: 2px;
+}
+
+.tooltipIcon {
+    color: var(--muted-foreground, rgba(255, 255, 255, 0.4));
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.tooltipContainer:hover .tooltipIcon {
+    color: #818cf8;
+    transform: scale(1.15);
+}
+
+.tooltipPopover {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    width: 260px;
+    padding: 14px 16px;
+    background: rgba(18, 22, 34, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 20px rgba(99, 102, 241, 0.15);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 100;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+}
+
+.tooltipContainer:hover .tooltipPopover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.tooltipPopover::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: rgba(18, 22, 34, 0.96) transparent transparent transparent;
+}
+
+.tooltipTitle {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #818cf8;
+    margin-bottom: 6px;
+    letter-spacing: -0.2px;
+}
+
+.tooltipBody {
+    font-size: 0.82rem;
+    color: #d1d5db;
+    line-height: 1.45;
+    font-weight: 400;
+}
 

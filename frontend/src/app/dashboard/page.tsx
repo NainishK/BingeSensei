@@ -273,10 +273,12 @@ export default function DashboardOverview() {
             const cached = localStorage.getItem('binge_dash_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed.user) setUser(parsed.user);
-                if (parsed.stats) setStats(parsed.stats);
-                if (parsed.spendingDist) setSpendingDist(parsed.spendingDist);
-                if (parsed.watchlist) setWatchlist(parsed.watchlist);
+                if (parsed.user && (!parsed.user.country || parsed.user.country === user?.country)) {
+                    if (parsed.user) setUser(parsed.user);
+                    if (parsed.stats) setStats(parsed.stats);
+                    if (parsed.spendingDist) setSpendingDist(parsed.spendingDist);
+                    if (parsed.watchlist) setWatchlist(parsed.watchlist);
+                }
             }
         } catch (e) {
             /* ignore cache parse error */
