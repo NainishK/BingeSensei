@@ -47,7 +47,7 @@ export default function CustomSelect({
     // Filter options when searchable
     const filteredOptions = searchable && searchQuery
         ? options.filter(opt => {
-            const label = typeof opt.label === 'string' ? opt.label : String(opt.label);
+            const label = (opt as any).text || (typeof opt.label === 'string' ? opt.label : String(opt.label));
             return label.toLowerCase().includes(searchQuery.toLowerCase());
         })
         : options;

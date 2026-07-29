@@ -12,7 +12,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import ReportIssueModal from '@/components/ReportIssueModal';
 import CustomSelect from '@/components/CustomSelect';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { COUNTRY_CURRENCY_MAP, COUNTRY_OPTIONS } from '@/lib/currency';
+import { COUNTRY_CURRENCY_MAP, COUNTRY_OPTIONS, getCurrencySymbol } from '@/lib/currency';
 
 interface UserData {
     id: number;
@@ -143,7 +143,7 @@ export default function Profile() {
         }
     };
 
-    const currencySymbol = preferences.target_currency === 'INR' ? '₹' : '$';
+    const currencySymbol = getCurrencySymbol(country);
 
     if (loading) return (
         <div className={styles.container}>
@@ -291,7 +291,7 @@ export default function Profile() {
                                     <input
                                         type="number"
                                         className={styles.select}
-                                        placeholder="e.g. 50"
+                                        placeholder={country === 'JP' ? 'e.g. 5000' : country === 'IN' ? 'e.g. 2000' : country === 'PH' ? 'e.g. 1000' : 'e.g. 50'}
                                         value={preferences.target_budget || ''}
                                         onChange={e => setPreferences({ ...preferences, target_budget: parseInt(e.target.value) || undefined })}
                                     />

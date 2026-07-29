@@ -36,10 +36,11 @@
     background: #1e293b;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 10px;
-    overflow: hidden;
+    overflow-y: auto;
+    max-height: 280px;
     box-shadow: 0 16px 40px rgba(0,0,0,0.5);
     z-index: 100;
-    min-width: 160px;
+    min-width: 170px;
 }
 
 .option {
