@@ -126,7 +126,7 @@ export default function RecommendationsPage() {
         window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
     };
 
-    const trendingRecs = dashboardRecs.filter(r => r.type === 'trending');
+    const trendingRecs = dashboardRecs.filter(r => r.type === 'trending' || r.type === 'global_trending');
     const cancelRecs = dashboardRecs.filter(r => r.type === 'cancel' && r.service_name !== 'YouTube Premium');
 
     if (loadingDashboard && dashboardRecs.length === 0) return <RecommendationsSkeleton />;
