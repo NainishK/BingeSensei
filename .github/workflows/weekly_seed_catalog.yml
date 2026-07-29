@@ -1,0 +1,37 @@
+name: Weekly Catalog Auto-Seeder
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every Sunday
+    - cron: '0 0 * * 0'
+  # Allows manual execution from GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  seed-catalog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run Seed Catalog Script
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL || secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Warning: Neither NEON_DATABASE_URL nor DATABASE_URL is set in GitHub Secrets."
+            echo "Skipping production database re-seeding."
+            exit 0
+          fi
+          python backend/scripts/seed_data.py

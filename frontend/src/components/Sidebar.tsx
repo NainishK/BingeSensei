@@ -52,10 +52,6 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
         }
     }, [theme]);
 
-    const getFlag = (code: string) => {
-        return COUNTRY_FLAG_MAP[code] || '🌍';
-    };
-
     const getCountryName = (code: string) => {
         const names: Record<string, string> = {
             'US': 'United States',
