@@ -130,12 +130,22 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
                 deduped_subs.append(s)
         subs_text = ", ".join(deduped_subs)
     
-    # Build a list of well-known streaming services the user does NOT have
-    all_known_services = [
-        "Apple TV+", "HBO Max", "Max", "Paramount+", "Peacock", "Hulu", "Disney+",
-        "Mubi", "Shudder", "AMC+", "BritBox", "Starz", "Showtime", "ESPN+",
-        "Lionsgate Play", "SonyLiv", "AltBalaji", "Eros Now"
-    ]
+    # Build regional list of well-known streaming services the user does NOT have
+    regional_services_map = {
+        'GB': ["NOW (Sky)", "BBC iPlayer", "ITVX Premium", "Disney+", "Apple TV+", "Paramount+", "Netflix"],
+        'DE': ["WOW (Sky Deutschland)", "RTL+", "Joyn PLUS+", "Disney+", "Apple TV+", "Netflix"],
+        'CA': ["Crave", "Sportsnet+", "TSN+", "Disney+", "Apple TV+", "Netflix"],
+        'AU': ["BINGE", "Stan", "Kayo Sports", "Disney+", "Apple TV+", "Netflix"],
+        'JP': ["U-NEXT", "Hulu Japan", "Abema Premium", "Disney+", "Apple TV+", "Netflix"],
+        'PH': ["HBO GO Asia", "Viu Philippines", "iWantTFC", "Disney+", "Apple TV+", "Netflix"],
+        'SG': ["mewatch", "Viu SG", "Disney+", "Apple TV+", "Netflix"],
+        'NZ': ["Neon", "TVNZ+", "Disney+", "Apple TV+", "Netflix"],
+        'BR': ["Globoplay", "Max", "Disney+", "Apple TV+", "Netflix"],
+        'MX': ["ViX Premium", "Max", "Disney+", "Apple TV+", "Netflix"],
+        'IN': ["JioHotstar", "Zee5", "SonyLIV", "Amazon Prime Video", "Netflix", "Apple TV+"],
+        'US': ["Hulu", "Max", "Paramount+", "Peacock", "Disney+", "Apple TV+", "Netflix"]
+    }
+    all_known_services = regional_services_map.get(country, regional_services_map['US'])
     not_on_subs = [svc for svc in all_known_services if svc.lower().replace(" ", "").replace("+", "") not in {n.lower().replace(" ", "").replace("+", "") for n in seen_sub_names}]
     not_subscribed_text = ", ".join(not_on_subs) if not_on_subs else "other streaming services"
     

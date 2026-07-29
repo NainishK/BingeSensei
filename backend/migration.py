@@ -68,32 +68,7 @@ def run_migration():
                 else:
                     print(f"   ❌ Error adding {col}: {e}")
 
-        # Data Backfill for Subscriptions
-        print("🔄 Running Data Backfill for Subscriptions...")
-        try:
-            # 1. Fetch all users with their country
-            # SQLite specific or Generic SQL
-            users_result = conn.execute(text("SELECT id, country FROM users"))
-            users = users_result.fetchall()
-            
-            for user in users:
-                uid, country = user
-                u_country = country if country else 'US'
-                
-                # Update subs for this user
-                # We want to set country = user.country WHERE user_id = uid AND country IS NULL (or check if it was just added default 'US')
-                # Actually, since we added column with default 'US', they are all 'US'. 
-                # We only need to update if user.country != 'US'.
-                if u_country != 'US':
-                    print(f"   📍 Backfilling User {uid} subs to '{u_country}'")
-                    update_sql = text(f"UPDATE subscriptions SET country = :c WHERE user_id = :uid")
-                    conn.execute(update_sql, {"c": u_country, "uid": uid})
-            
-            conn.commit()
-            print("✅ Data Backfill Complete")
-        except Exception as e:
-            print(f"❌ Data Backfill Failed: {e}")
-            conn.rollback()
+        print("✅ Schema Migration Complete")
 
 if __name__ == "__main__":
     try:

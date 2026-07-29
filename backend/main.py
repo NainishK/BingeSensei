@@ -52,6 +52,39 @@ async def log_requests(request: Request, call_next):
         
     return response
 
+COUNTRY_CURRENCY_MAP = {
+    'US': 'USD', 'IN': 'INR', 'GB': 'GBP', 'CA': 'CAD', 'AU': 'AUD',
+    'DE': 'EUR', 'FR': 'EUR', 'ES': 'EUR', 'IT': 'EUR', 'NL': 'EUR',
+    'JP': 'JPY', 'SG': 'SGD', 'PH': 'PHP', 'NZ': 'NZD', 'BR': 'BRL', 'MX': 'MXN'
+}
+
+CURRENCY_TO_USD_RATES = {
+    'USD': 1.0,
+    'INR': 83.0,
+    'GBP': 0.79,
+    'EUR': 0.92,
+    'CAD': 1.36,
+    'AUD': 1.52,
+    'JPY': 155.0,
+    'SGD': 1.35,
+    'PHP': 58.0,
+    'NZD': 1.65,
+    'BRL': 5.40,
+    'MXN': 18.00,
+}
+
+def get_country_currency(country: str = "US") -> str:
+    return COUNTRY_CURRENCY_MAP.get(country, "USD")
+
+def convert_to_usd(amount: float, currency_or_country: str) -> float:
+    if not amount:
+        return 0.0
+    code = currency_or_country
+    if len(code) == 2:
+        code = COUNTRY_CURRENCY_MAP.get(code, "USD")
+    rate = CURRENCY_TO_USD_RATES.get(code, 1.0)
+    return amount / rate
+
 # --- Admin Panel Setup ---
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
@@ -144,6 +177,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Startup Auto-Seeder: Ensures Neon PostgreSQL / Production DB has complete 16-country service catalog
+@app.on_event("startup")
+def auto_seed_catalog_services():
+    try:
+        db = SessionLocal()
+        service_count = db.query(models.Service).count()
+        if service_count < 20:
+            logger.info("Initializing regional database service catalog (Auto-Seeder)...")
+            from scripts.seed_data import seed_data
+            seed_data()
+        db.close()
+    except Exception as e:
+        logger.warning(f"Auto-Seeder Note: {e}")
 
 # Dependency
 def get_db():
@@ -400,6 +447,18 @@ async def startup_event():
         logger.info("✅ Schema Migration Completed")
     except Exception as e:
         logger.error(f"❌ Schema Migration Failed: {e}")
+
+    # Auto-seed regional service templates if not present
+    try:
+        import scripts.seed_data as seed_script
+        db = SessionLocal()
+        gb_count = db.query(models.Service).filter(models.Service.country == "GB").count()
+        if gb_count == 0:
+            logger.info("🌱 Seeding regional service templates (US, IN, GB, DE, CA, AU, JP)...")
+            seed_script.seed_data()
+        db.close()
+    except Exception as e:
+        logger.error(f"❌ Regional Seeding Failed: {e}")
 
 @app.post("/users/", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -1071,7 +1130,7 @@ def get_unified_insights(
 
     
     # Determine Currency
-    currency = "INR" if current_user.country == "IN" else "USD"
+    currency = get_country_currency(current_user.country)
     
     # Generate
     try:
@@ -1260,7 +1319,7 @@ def get_subscription_coverage(
         variety_bonus = 20 if type_count >= 2 else 0
         raw_utility = hour_score + title_score + variety_bonus  # max = 100
 
-        cost_usd = monthly_cost / 83.0 if country == "IN" else monthly_cost
+        cost_usd = convert_to_usd(monthly_cost, country)
         cost_penalty = min(cost_usd * 1.5, 20.0)
 
         value_score = round(max(10, raw_utility - cost_penalty))
@@ -1402,7 +1461,7 @@ def get_subscription_coverage(
             s_monthly_cost = (cheapest_plan["cost"] / 12
                               if cheapest_plan["billing_cycle"] and cheapest_plan["billing_cycle"].lower() == "yearly"
                               else cheapest_plan["cost"])
-        s_cost_usd = s_monthly_cost / 83.0 if country == "IN" else s_monthly_cost
+        s_cost_usd = convert_to_usd(s_monthly_cost, country)
         s_cost_penalty = min(s_cost_usd * 1.5, 20.0)
         s_value_score = round(max(10, s_raw_utility - s_cost_penalty))
         s_cost_per_title = round(s_monthly_cost / info["count"], 2) if info["count"] > 0 and s_monthly_cost > 0 else None

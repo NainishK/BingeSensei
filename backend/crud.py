@@ -235,15 +235,56 @@ def update_watchlist_item_rating(db: Session, item_id: int, user_id: int, rating
     return db_item
 
 def get_services(db: Session, country: str = "US"):
-    return db.query(models.Service).filter(
+    services = db.query(models.Service).filter(
         models.Service.country == country
     ).all()
+    if not services:
+        services = db.query(models.Service).filter(
+            models.Service.country == "US"
+        ).all()
+    return services
 
 def get_plans(db: Session, service_id: int, country: str = "US"):
-    return db.query(models.Plan).filter(
+    plans = db.query(models.Plan).filter(
         models.Plan.service_id == service_id,
         models.Plan.country == country
     ).all()
+
+    if not plans:
+        # Fallback to US plans if country specific plans aren't seeded yet
+        us_plans = db.query(models.Plan).filter(
+            models.Plan.service_id == service_id,
+            models.Plan.country == "US"
+        ).all()
+
+        if not us_plans:
+            # Secondary fallback to any plans for this service
+            us_plans = db.query(models.Plan).filter(
+                models.Plan.service_id == service_id
+            ).all()
+
+        currency_map = {
+            'US': 'USD', 'IN': 'INR', 'GB': 'GBP', 'CA': 'CAD', 'AU': 'AUD',
+            'DE': 'EUR', 'FR': 'EUR', 'ES': 'EUR', 'IT': 'EUR', 'NL': 'EUR',
+            'JP': 'JPY', 'SG': 'SGD', 'PH': 'PHP', 'NZ': 'NZD', 'BR': 'BRL', 'MX': 'MXN'
+        }
+        target_currency = currency_map.get(country, "USD")
+
+        # Create temporary objects with target currency for UI rendering
+        fallback_plans = []
+        for p in us_plans:
+            fallback_plans.append(models.Plan(
+                id=p.id,
+                service_id=p.service_id,
+                name=p.name,
+                cost=p.cost,
+                currency=target_currency,
+                country=country,
+                billing_cycle=p.billing_cycle
+            ))
+        return fallback_plans
+
+    return plans
 
 def update_watchlist_item_progress(db: Session, item_id: int, user_id: int, current_season: int, current_episode: int):
     db_item = db.query(models.WatchlistItem).filter(

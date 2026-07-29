@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 import styles from './subscriptions.module.css';
 import { Subscription, Service, Plan } from '@/lib/types';
-import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw } from 'lucide-react';
+import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info } from 'lucide-react';
 import { useRecommendations } from '@/context/RecommendationsContext';
 import { formatCurrency, getCurrencySymbol } from '@/lib/currency';
 import DatePicker from "react-datepicker";
@@ -53,15 +53,17 @@ export default function SubscriptionsPage() {
     const dateInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // 1. Instantly load cached subscriptions if available (<50ms)
+        // 1. Instantly load cached subscriptions if available and matching user country (<50ms)
         try {
             const cached = localStorage.getItem('binge_subs_cache');
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed.subscriptions) setSubscriptions(parsed.subscriptions);
-                if (parsed.services) setServices(parsed.services);
-                if (parsed.userCountry) setUserCountry(parsed.userCountry);
-                setLoading(false);
+                // Only use cache if it matches current region to prevent currency mismatch
+                if (parsed.subscriptions && parsed.userCountry === userCountry) {
+                    setSubscriptions(parsed.subscriptions);
+                    if (parsed.services) setServices(parsed.services);
+                    setLoading(false);
+                }
             }
         } catch (e) { /* ignore */ }
 
@@ -611,7 +613,18 @@ export default function SubscriptionsPage() {
 
                                 {plans.length > 0 && selectedServiceId !== 'custom' && (
                                     <div className={styles.field}>
-                                        <label>Plan</label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            Plan
+                                            <div className={styles.tooltipContainer}>
+                                                <Info size={14} className={styles.tooltipIcon} />
+                                                <div className={styles.tooltipPopover}>
+                                                    <div className={styles.tooltipTitle}>Plan Pricing Accuracy</div>
+                                                    <div className={styles.tooltipBody}>
+                                                        Plan costs are estimated regional averages. You can freely review and edit the exact cost and billing date anytime below.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
                                         <CustomSelect
                                             value={selectedPlanId || ''}
                                             onChange={(val) => setSelectedPlanId(Number(val))}

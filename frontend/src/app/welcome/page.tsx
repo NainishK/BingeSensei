@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './welcome.module.css';
 import CustomSelect from '@/components/CustomSelect';
+import { COUNTRY_OPTIONS } from '@/lib/currency';
 import api from '@/lib/api';
 
 export default function WelcomePage() {
@@ -58,10 +59,7 @@ export default function WelcomePage() {
                 <div className={styles.form}>
                     <CustomSelect
                         value={country}
-                        options={[
-                            { value: 'US', label: '🇺🇸 United States (US)' },
-                            { value: 'IN', label: '🇮🇳 India (IN)' }
-                        ]}
+                        options={COUNTRY_OPTIONS}
                         onChange={(val) => setCountry(val as string)}
                         forceLightMode={true}
                     />
