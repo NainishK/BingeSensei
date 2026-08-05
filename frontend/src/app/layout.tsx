@@ -18,7 +18,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://bingesensei.app';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   alternates: {
-    canonical: siteUrl,
+    canonical: `${siteUrl}/`,
   },
   title: {
     default: "BingeSensei - Smart OTT Subscription & Watchlist Manager",
