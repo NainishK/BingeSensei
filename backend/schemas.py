@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import date, datetime
 
 class SubscriptionBase(BaseModel):
@@ -59,7 +59,7 @@ class WatchlistProgressUpdate(BaseModel):
     current_episode: int
 
 class WatchlistItemCreate(WatchlistItemBase):
-    genre_ids: Optional[List[int]] = None
+    genre_ids: Optional[Union[List[int], str]] = None
     total_seasons: Optional[int] = 0
     total_episodes: Optional[int] = 0
 

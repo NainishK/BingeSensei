@@ -61,7 +61,7 @@ def update_subscription(db: Session, subscription_id: int, subscription: schemas
         db.refresh(db_sub)
     return db_sub
 
-def get_watchlist(db: Session, user_id: int, skip: int = 0, limit: int = 100):
+def get_watchlist(db: Session, user_id: int, skip: int = 0, limit: int = 5000):
     return db.query(models.WatchlistItem).filter(models.WatchlistItem.user_id == user_id).offset(skip).limit(limit).all()
 
 import json
@@ -86,7 +86,7 @@ def update_interests(db: Session, user_id: int, genre_ids: list, delta: int):
                 db.add(interest)
     db.commit()
 
-def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_id: int):
+def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_id: int, skip_availability_fetch: bool = False):
     # Check for duplicate
     existing_item = db.query(models.WatchlistItem).filter(
         models.WatchlistItem.user_id == user_id,
@@ -97,7 +97,16 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
 
     # Prepare data
     item_data = item.dict()
-    genre_ids_list = item_data.pop('genre_ids', [])
+    raw_genres = item_data.pop('genre_ids', [])
+    if isinstance(raw_genres, str):
+        try:
+            genre_ids_list = json.loads(raw_genres)
+        except Exception:
+            genre_ids_list = []
+    elif isinstance(raw_genres, list):
+        genre_ids_list = raw_genres
+    else:
+        genre_ids_list = []
     
     # ROBUSTNESS CHECK: If any key fields are missing, fetch from TMDB
     needs_fetch = False
@@ -106,7 +115,7 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
     if not item_data.get('poster_path'): needs_fetch = True
     
     # We prioritize fetching if data is thin (e.g. from minimal search results)
-    if needs_fetch:
+    if needs_fetch and not skip_availability_fetch:
         print(f"[create_watchlist_item] Missing metadata for {item.tmdb_id}, enriching from TMDB...")
         try:
             details = tmdb_client.get_details(item.media_type, item.tmdb_id)
@@ -115,7 +124,6 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
                 if not item_data.get('title'): item_data['title'] = details.get('title') or details.get('name')
                 if not item_data.get('overview'): item_data['overview'] = details.get('overview') or ""
                 if not item_data.get('poster_path'): item_data['poster_path'] = details.get('poster_path')
-                if not item_data.get('vote_average'): item_data['vote_average'] = details.get('vote_average')
                 if not item_data.get('vote_average'): item_data['vote_average'] = details.get('vote_average')
                 
                 # Fetch Genres if missing
@@ -134,7 +142,7 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
             print(f"[create_watchlist_item] Enrichment failed: {e}")
     # Auto-Detect Streaming Availability (Strict Mode: Only matches User Subscriptions)
     # MOVED OUTSIDE: Runs even if frontend provided basic metadata
-    if not item_data.get('available_on'):
+    if not item_data.get('available_on') and not skip_availability_fetch:
         try:
             # 1. Get User's Country & Subscriptions
             user = get_user(db, user_id)

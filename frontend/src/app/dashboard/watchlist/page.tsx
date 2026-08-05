@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import AddMediaModal from '@/components/AddMediaModal';
-import { Plus, Search, Clapperboard, CalendarClock, CheckCircle, LayoutGrid, List, Layers, ArrowUp, ArrowDown, PauseCircle, XCircle, SlidersHorizontal, ChevronDown } from 'lucide-react';
+import ImportExportModal from '@/components/ImportExportModal';
+import { Plus, Search, Clapperboard, CalendarClock, CheckCircle, LayoutGrid, List, Layers, ArrowUp, ArrowDown, PauseCircle, XCircle, SlidersHorizontal, ChevronDown, Download, Loader2 } from 'lucide-react';
 import styles from './watchlist.module.css';
 import { STATUS_COLORS, ALL_TAB_CONFIG } from '@/lib/statusColors';
 import GenreFilter from './GenreFilter';
@@ -32,8 +33,18 @@ export default function WatchlistPage() {
     const [showBackToTop, setShowBackToTop] = useState(false); // Scroll to top visibility
     const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Mobile Custom Dropdown Toggle
 
+    // Infinite Scroll / Batch Rendering State (25 items = 5 full rows of 5 cards)
+    const [visibleCount, setVisibleCount] = useState(25);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+    // Reset visible count whenever active filters or search changes
+    useEffect(() => {
+        setVisibleCount(25);
+    }, [activeTab, searchQuery, typeFilter, providerFilter, selectedGenres, sortField, sortOrder]);
+
     // Modal State
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [itemToRemove, setItemToRemove] = useState<MediaItem | null>(null);
     const [userServices, setUserServices] = useState<Set<string>>(new Set()); // Store active subscription names
 
@@ -86,6 +97,11 @@ export default function WatchlistPage() {
                 setShowBackToTop(true);
             } else {
                 setShowBackToTop(false);
+            }
+
+            // Scroll trigger to load more items when within 600px of bottom
+            if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600) {
+                setVisibleCount((prev) => prev + 25);
             }
         };
         window.addEventListener('scroll', handleScroll);
@@ -256,6 +272,27 @@ export default function WatchlistPage() {
         return sortOrder === 'asc' ? comparison : -comparison;
     });
 
+    const displayedItems = filteredItems.slice(0, visibleCount);
+    const hasMore = visibleCount < filteredItems.length;
+
+    // IntersectionObserver to auto-load next batch when scrolling near bottom
+    useEffect(() => {
+        const target = loadMoreRef.current;
+        if (!target || !hasMore) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    setVisibleCount((prev) => Math.min(prev + 25, filteredItems.length));
+                }
+            },
+            { rootMargin: '400px' }
+        );
+
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [hasMore, visibleCount, filteredItems.length]);
+
     const getTabCount = (status: string) => {
         // Basic counts (ignoring other filters for context)
         if (status === 'all') return items.length;
@@ -282,12 +319,21 @@ export default function WatchlistPage() {
                     <h1 className={styles.pageTitle}>My Watchlist</h1>
                     <p className={styles.subtitle}>Track what you're watching and discover new favorites.</p>
                 </div>
-                <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className={styles.addButton}
-                >
-                    <Plus size={20} /> Add New
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className={styles.addButton}
+                        style={{ background: 'var(--bg-hover, rgba(255, 255, 255, 0.05))', border: '1px solid var(--border-color, rgba(255, 255, 255, 0.15))', color: 'var(--text-primary, #f8fafc)' }}
+                    >
+                        <Download size={18} /> Import / Export
+                    </button>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className={styles.addButton}
+                    >
+                        <Plus size={20} /> Add New
+                    </button>
+                </div>
             </div>
 
             {/* Navigation Tabs */}
@@ -503,24 +549,86 @@ export default function WatchlistPage() {
             </div>
 
             {filteredItems.length > 0 ? (
-                <div className={viewMode === 'grid' ? styles.watchlistGrid : styles.watchlistList}>
-                    {filteredItems.map(item => (
-                        <div key={item.dbId} style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
-                            <MediaCard
-                                item={item}
-                                existingStatus={item.status}
-                                showServiceBadge={
-                                    item.available_on && userServices.has(item.available_on)
-                                        ? item.available_on
-                                        : undefined
-                                }
-                                layout={viewMode}
-                                onRemove={() => confirmRemove(item)}
-                                onStatusChange={(s, r) => handleStatusUpdate(item.dbId!, s, r)}
-                            />
+                <>
+                    <div className={viewMode === 'grid' ? styles.watchlistGrid : styles.watchlistList}>
+                        {displayedItems.map(item => (
+                            <div key={item.dbId} style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
+                                <MediaCard
+                                    item={item}
+                                    existingStatus={item.status}
+                                    showServiceBadge={
+                                        item.available_on && userServices.has(item.available_on)
+                                            ? item.available_on
+                                            : undefined
+                                    }
+                                    layout={viewMode}
+                                    onRemove={() => confirmRemove(item)}
+                                    onStatusChange={(s, r) => handleStatusUpdate(item.dbId!, s, r)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {hasMore && (
+                        <div
+                            ref={loadMoreRef}
+                            onClick={() => setVisibleCount((prev) => Math.min(prev + 50, filteredItems.length))}
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '2.5rem 1rem',
+                                gap: '0.75rem',
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Loader2 className="animate-spin" size={24} style={{ color: 'var(--accent-purple, #8b5cf6)' }} />
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)', fontWeight: 500 }}>
+                                Showing {displayedItems.length} of {filteredItems.length} items
+                            </span>
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setVisibleCount((prev) => Math.min(prev + 50, filteredItems.length));
+                                    }}
+                                    style={{
+                                        padding: '0.45rem 1rem',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        borderRadius: '8px',
+                                        background: 'rgba(139, 92, 246, 0.15)',
+                                        border: '1px solid rgba(139, 92, 246, 0.3)',
+                                        color: '#c084fc',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Load More (+50)
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setVisibleCount(filteredItems.length);
+                                    }}
+                                    style={{
+                                        padding: '0.45rem 1rem',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        borderRadius: '8px',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        color: '#94a3b8',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Show All ({filteredItems.length})
+                                </button>
+                            </div>
                         </div>
-                    ))}
-                </div>
+                    )}
+                </>
             ) : (
                 <div className={styles.emptyState}>
                     <div className={styles.emptyIcon}>
@@ -581,6 +689,12 @@ export default function WatchlistPage() {
                     <Plus size={24} />
                 </button>
             </div>
+
+            <ImportExportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={fetchWatchlist}
+            />
         </div>
     );
 }

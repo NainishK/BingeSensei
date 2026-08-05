@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Query, UploadFile, File, Form
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -747,10 +747,141 @@ def add_to_watchlist(
     return new_item
 
 @app.get("/watchlist/", response_model=list[schemas.WatchlistItem])
-def read_watchlist(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+def read_watchlist(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
 
     # Optimized: Return raw list immediately. Enrichment happens via separate endpoint.
     return crud.get_watchlist(db, user_id=current_user.id, skip=skip, limit=limit)
+
+# --- WATCHLIST IMPORT & EXPORT ENDPOINTS ---
+
+@app.get("/watchlist/export")
+def export_watchlist(
+    format: str = Query("json"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user)
+):
+    import io, csv, json
+    items = crud.get_watchlist(db, user_id=current_user.id, limit=5000)
+    
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Title", "Media Type", "TMDB ID", "Status", "User Rating", "Current Season", "Current Episode", "Total Seasons", "Total Episodes", "Notes"])
+        for item in items:
+            writer.writerow([
+                item.title, item.media_type, item.tmdb_id, item.status, 
+                item.user_rating or "", item.current_season, item.current_episode, 
+                item.total_seasons, item.total_episodes, item.notes or ""
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=bingesensei_watchlist.csv"}
+        )
+    else:
+        export_data = []
+        for item in items:
+            export_data.append({
+                "tmdb_id": item.tmdb_id,
+                "title": item.title,
+                "media_type": item.media_type,
+                "poster_path": item.poster_path,
+                "status": item.status,
+                "user_rating": item.user_rating,
+                "current_season": item.current_season,
+                "current_episode": item.current_episode,
+                "total_seasons": item.total_seasons,
+                "total_episodes": item.total_episodes,
+                "notes": item.notes,
+                "added_at": item.added_at.isoformat() if item.added_at else None
+            })
+        return StreamingResponse(
+            io.BytesIO(json.dumps(export_data, indent=2).encode('utf-8')),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=bingesensei_watchlist.json"}
+        )
+
+@app.post("/watchlist/import/parse")
+async def parse_import_file(
+    file: UploadFile = File(...),
+    source_type: str = Form("auto")
+):
+    import import_export, json
+    contents = await file.read()
+    contents_str = contents.decode('utf-8', errors='ignore')
+    
+    parsed_items = []
+    filename = file.filename.lower() if file.filename else ""
+    
+    if source_type == "imdb" or ("watchlist" in filename or "ratings" in filename) and filename.endswith(".csv"):
+        parsed_items = import_export.parse_imdb_csv(contents_str)
+        if not parsed_items:
+            parsed_items = import_export.parse_letterboxd_csv(contents_str)
+    elif source_type == "letterboxd" or ("watched" in filename) and filename.endswith(".csv"):
+        parsed_items = import_export.parse_letterboxd_csv(contents_str)
+    elif source_type == "mal" or filename.endswith(".xml"):
+        parsed_items = import_export.parse_mal_xml(contents_str)
+    elif filename.endswith(".json"):
+        try:
+            raw_json = json.loads(contents_str)
+            if isinstance(raw_json, list):
+                parsed_items = raw_json
+        except Exception:
+            pass
+            
+    resolved_results = []
+    import time
+    for item in parsed_items[:2000]: # Supports full watchlists up to 2,000 items
+        res = import_export.resolve_item_to_tmdb(item)
+        if res:
+            resolved_results.append(res)
+        time.sleep(0.005)
+            
+    deduped = import_export.deduplicate_resolved_items(resolved_results)
+    return {"total_found": len(parsed_items), "resolved_items": deduped}
+
+@app.post("/watchlist/import/anilist")
+def parse_anilist_import(username: str = Form(...)):
+    import import_export, time
+    items = import_export.fetch_anilist_user_list(username)
+    resolved_results = []
+    for item in items[:2000]: # Supports full watchlists up to 2,000 items
+        res = import_export.resolve_item_to_tmdb(item)
+        if res:
+            resolved_results.append(res)
+        time.sleep(0.005)
+            
+    deduped = import_export.deduplicate_resolved_items(resolved_results)
+    return {"total_found": len(items), "resolved_items": deduped}
+
+@app.post("/watchlist/import/confirm")
+def confirm_import_items(
+    items: list[schemas.WatchlistItemCreate],
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(dependencies.get_current_user)
+):
+    imported_count = 0
+    skipped_count = 0
+    
+    for item in items:
+        existing = db.query(models.WatchlistItem).filter(
+            models.WatchlistItem.user_id == current_user.id,
+            models.WatchlistItem.tmdb_id == item.tmdb_id
+        ).first()
+        
+        if existing:
+            skipped_count += 1
+            continue
+            
+        crud.create_watchlist_item(db=db, item=item, user_id=current_user.id, skip_availability_fetch=True)
+        imported_count += 1
+        
+    import recommendations
+    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    
+    return {"imported": imported_count, "skipped": skipped_count}
 
 @app.post("/watchlist/availability")
 def check_watch_availability(item_ids: list[int], background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):

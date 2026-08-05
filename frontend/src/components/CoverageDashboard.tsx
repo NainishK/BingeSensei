@@ -303,12 +303,12 @@ export default function CoverageDashboard({ userCountry }: CoverageDashboardProp
 
             {/* ── Services Grid ── */}
             <div className={styles.servicesGrid}>
-                {services.map(svc => {
+                {services.map((svc, idx) => {
                     const isUnused = svc.total_covered === 0;
 
                     return (
                         <div
-                            key={svc.name}
+                            key={`${svc.name}-${idx}`}
                             className={`${styles.serviceCard} ${isUnused ? styles.serviceCardUnused : ''}`}
                         >
                             {/* Card Header */}
@@ -449,8 +449,8 @@ export default function CoverageDashboard({ userCountry }: CoverageDashboardProp
                         These services cover the most unwatched titles from your watchlist that you don&apos;t currently subscribe to.
                     </p>
                     <div className={styles.suggestedGrid}>
-                        {data.suggested_services.slice(0, 4).map(svc => (
-                            <div key={svc.name} className={styles.serviceCard}>
+                        {data.suggested_services.slice(0, 4).map((svc, idx) => (
+                            <div key={`${svc.name}-${idx}`} className={styles.serviceCard}>
 
                                 {/* Header — identical to subscribed card */}
                                 <div className={styles.serviceCardHeader}>
@@ -554,8 +554,8 @@ export default function CoverageDashboard({ userCountry }: CoverageDashboardProp
                                 {/* Available titles */}
                                 {svc.titles.length > 0 && (
                                     <div className={styles.suggestedTitles}>
-                                        {svc.titles.map(t => (
-                                            <span key={t} className={styles.suggestedTitleTag}>{t}</span>
+                                        {svc.titles.map((t, tIdx) => (
+                                            <span key={`${t}-${tIdx}`} className={styles.suggestedTitleTag}>{t}</span>
                                         ))}
                                         {svc.count > svc.titles.length && (
                                             <span className={styles.suggestedTitleMore}>+{svc.count - svc.titles.length} more</span>

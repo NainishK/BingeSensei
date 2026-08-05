@@ -51,6 +51,20 @@ def search_multi(query: str):
         print(f"TMDB Exception: {e}")
         return {"results": []}
 
+def find_by_external_id(external_id: str, external_source: str = "imdb_id"):
+    if not settings.TMDB_API_KEY or settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
+        return {}
+    url = f"{TMDB_BASE_URL}/find/{external_id}"
+    params = {"api_key": settings.TMDB_API_KEY, "external_source": external_source}
+    headers = {"User-Agent": "SubscriptionManager/1.0", "Accept": "application/json"}
+    try:
+        response = session.get(url, params=params, headers=headers, timeout=10, verify=False)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"Error finding by external_id {external_id}: {e}")
+    return {}
+
 from functools import lru_cache
 
 @lru_cache(maxsize=128)
