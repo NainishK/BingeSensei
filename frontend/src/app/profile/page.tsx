@@ -5,11 +5,12 @@ import api from '@/lib/api';
 import Link from 'next/link';
 import styles from './profile.module.css';
 import {
-    ArrowLeft, CheckCircle, AlertCircle, Bug, Save,
+    ArrowLeft, CheckCircle, AlertCircle, Bug, Save, Download,
     User, Settings, Users, Clock, Globe, Monitor, Ban
 } from 'lucide-react';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import ReportIssueModal from '@/components/ReportIssueModal';
+import ImportExportModal from '@/components/ImportExportModal';
 import CustomSelect from '@/components/CustomSelect';
 import { useRecommendations } from '@/context/RecommendationsContext';
 import { COUNTRY_CURRENCY_MAP, COUNTRY_OPTIONS, getCurrencySymbol } from '@/lib/currency';
@@ -49,6 +50,7 @@ export default function Profile() {
     const [saving, setSaving] = useState(false);
     const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const [preferences, setPreferences] = useState<UserPreferences>({
         household_size: 'Solo',
@@ -233,6 +235,26 @@ export default function Profile() {
                                         className={styles.select}
                                     />
                                     <p className={styles.helperText}>Affects subscription costs and content availability.</p>
+                                </div>
+                            </div>
+
+                            {/* Watchlist Data & Backups */}
+                            <div className={styles.section}>
+                                <div className={styles.sectionTitle}>Watchlist Data & Backups</div>
+                                <div className={styles.infoRow} style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>Import & Export Watchlist</div>
+                                        <p className={styles.helperText} style={{ margin: '0.2rem 0 0 0' }}>
+                                            Sync watchlists from IMDb, Letterboxd, MyAnimeList, or AniList, or download backups (.csv / .json).
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsImportModalOpen(true)}
+                                        className={styles.importBtn}
+                                    >
+                                        <Download size={15} /> Import / Export
+                                    </button>
                                 </div>
                             </div>
 
@@ -442,6 +464,14 @@ export default function Profile() {
             <ReportIssueModal
                 visible={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
+            />
+
+            <ImportExportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => {
+                    fetchProfile();
+                }}
             />
         </div>
     );

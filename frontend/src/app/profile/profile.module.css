@@ -210,6 +210,25 @@
     border-color: #ef4444;
 }
 
+.importBtn {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: opacity 0.2s ease;
+}
+
+.importBtn:hover {
+    opacity: 0.9;
+}
+
 /* ── Form Controls ── */
 .label {
     font-weight: 600;

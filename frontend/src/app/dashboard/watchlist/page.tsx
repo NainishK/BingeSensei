@@ -210,6 +210,15 @@ export default function WatchlistPage() {
         setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
     };
 
+    // Type Counts for Filter Dropdown (contextual to activeTab)
+    const tabItems = activeTab === 'all' ? items : items.filter(i => i.status === activeTab);
+    const typeCounts = {
+        all: tabItems.length,
+        movie: tabItems.filter(i => i.media_type === 'movie' && !(i.original_language === 'ja' && i.genre_ids?.includes(16))).length,
+        tv: tabItems.filter(i => i.media_type === 'tv' && !(i.original_language === 'ja' && i.genre_ids?.includes(16))).length,
+        anime: tabItems.filter(i => i.original_language === 'ja' && i.genre_ids?.includes(16)).length,
+    };
+
     // Filter Logic
     const filteredItems = items.filter(item => {
         // 1. Status Tab (Always apply first)
@@ -319,14 +328,7 @@ export default function WatchlistPage() {
                     <h1 className={styles.pageTitle}>My Watchlist</h1>
                     <p className={styles.subtitle}>Track what you're watching and discover new favorites.</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    <button
-                        onClick={() => setIsImportModalOpen(true)}
-                        className={styles.addButton}
-                        style={{ background: 'var(--bg-hover, rgba(255, 255, 255, 0.05))', border: '1px solid var(--border-color, rgba(255, 255, 255, 0.15))', color: 'var(--text-primary, #f8fafc)' }}
-                    >
-                        <Download size={18} /> Import / Export
-                    </button>
+                <div className={styles.headerActions}>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
                         className={styles.addButton}
@@ -441,10 +443,10 @@ export default function WatchlistPage() {
                     <CustomSelect
                         value={typeFilter}
                         options={[
-                            { value: 'all', label: 'All Types' },
-                            { value: 'movie', label: 'Movies' },
-                            { value: 'tv', label: 'TV Shows' },
-                            { value: 'anime', label: 'Anime' }
+                            { value: 'all', label: `All Types (${typeCounts.all})` },
+                            { value: 'movie', label: `Movies (${typeCounts.movie})` },
+                            { value: 'tv', label: `TV Shows (${typeCounts.tv})` },
+                            { value: 'anime', label: `Anime (${typeCounts.anime})` }
                         ]}
                         onChange={(val) => setTypeFilter(val as any)}
                         className={styles.customSelectWrapper}
@@ -630,26 +632,78 @@ export default function WatchlistPage() {
                     )}
                 </>
             ) : (
-                <div className={styles.emptyState}>
-                    <div className={styles.emptyIcon}>
-                        {activeTab === 'watching' ? <Clapperboard size={32} /> :
-                            activeTab === 'plan_to_watch' ? <CalendarClock size={32} /> :
-                                <CheckCircle size={32} />}
-                    </div>
-                    <h3 className={styles.emptyTitle}>
-                        {activeTab === 'watching' ? 'No shows in progress' :
-                            activeTab === 'plan_to_watch' ? 'Your list is empty' :
-                                'No completed shows yet'}
-                    </h3>
-                    <p className={styles.emptyText}>
-                        {activeTab === 'watching' ? 'Start watching something from your plan to watch list!' :
-                            activeTab === 'plan_to_watch' ? 'Find movies and TV shows to add to your list.' :
-                                'Mark shows as watched when you finish them.'}
-                    </p>
-                    <button onClick={() => setIsAddModalOpen(true)} className={styles.emptyBtn}>
-                        <Search size={18} /> Browse Content
-                    </button>
-                </div>
+                (() => {
+                    const getEmptyStateDetails = () => {
+                        if (activeTab === 'watching') {
+                            return {
+                                icon: <Clapperboard size={32} />,
+                                title: 'No shows in progress',
+                                text: 'Start watching something from your plan to watch list!'
+                            };
+                        }
+                        if (activeTab === 'plan_to_watch') {
+                            return {
+                                icon: <CalendarClock size={32} />,
+                                title: 'Your plan to watch list is empty',
+                                text: 'Find movies and TV shows to add to your list.'
+                            };
+                        }
+                        if (activeTab === 'watched' || activeTab === 'completed') {
+                            return {
+                                icon: <CheckCircle size={32} />,
+                                title: 'No completed shows yet',
+                                text: 'Mark shows as watched when you finish them.'
+                            };
+                        }
+                        if (activeTab === 'paused') {
+                            return {
+                                icon: <PauseCircle size={32} />,
+                                title: 'No paused shows',
+                                text: 'Shows you take a break from will appear here.'
+                            };
+                        }
+                        if (activeTab === 'dropped') {
+                            return {
+                                icon: <XCircle size={32} />,
+                                title: 'No dropped shows',
+                                text: 'Shows you decide not to finish will appear here.'
+                            };
+                        }
+                        return {
+                            icon: <Layers size={32} />,
+                            title: 'No items found',
+                            text: searchQuery || selectedGenres.length > 0 ? 'Try adjusting your filters or search query.' : 'Your watchlist is empty. Add shows to get started!'
+                        };
+                    };
+
+                    const emptyDetails = getEmptyStateDetails();
+                    const isOverallEmpty = items.length === 0;
+
+                    return (
+                        <div className={styles.emptyState}>
+                            <div className={styles.emptyIcon}>{emptyDetails.icon}</div>
+                            <h3 className={styles.emptyTitle}>{emptyDetails.title}</h3>
+                            <p className={styles.emptyText}>{emptyDetails.text}</p>
+                            
+                            <div className={styles.emptyActions}>
+                                <button onClick={() => setIsAddModalOpen(true)} className={styles.emptyBtn}>
+                                    <Search size={18} /> Browse Content
+                                </button>
+                                {isOverallEmpty && (
+                                    <button onClick={() => setIsImportModalOpen(true)} className={styles.emptyImportBtn}>
+                                        <Download size={18} /> Import Watchlist
+                                    </button>
+                                )}
+                            </div>
+
+                            {isOverallEmpty && (
+                                <div className={styles.emptyImportTip}>
+                                    💡 <strong>Migrating from another platform?</strong> Import your watchlist from <strong>IMDb</strong>, <strong>Letterboxd</strong>, <strong>MyAnimeList</strong>, or <strong>AniList</strong> in 1-click! (You can also access Import & Export anytime under Profile & Settings).
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()
             )}
 
             {/* Modals */}
