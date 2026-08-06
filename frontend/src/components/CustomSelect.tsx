@@ -178,7 +178,7 @@ export default function CustomSelect({
                     aria-expanded={isOpen}
                     style={indicatorColor ? { borderLeft: `3px solid ${indicatorColor}` } : undefined}
                 >
-                    <span className={!selectedOption ? styles.placeholder : ''}>
+                    <span className={`${!selectedOption ? styles.placeholder : ''} ${styles.labelSpan}`}>
                         {selectedOption ? selectedOption.label : placeholder}
                     </span>
                     <ChevronDown size={18} className={`${styles.icon} ${isOpen ? styles.open : ''}`} />

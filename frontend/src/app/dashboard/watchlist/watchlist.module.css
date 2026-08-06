@@ -224,7 +224,7 @@
 
 /* Custom Select Wrappers */
 .customSelectWrapper {
-    min-width: 140px;
+    min-width: 160px;
     height: 2.125rem;
     z-index: 20;
 }

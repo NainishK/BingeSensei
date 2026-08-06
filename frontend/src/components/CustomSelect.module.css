@@ -20,7 +20,15 @@
     text-align: left;
     position: relative;
     z-index: 1;
-    /* Ensure button is above hidden input */
+    white-space: nowrap;
+    gap: 0.5rem;
+}
+
+.labelSpan {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
 }
 
 .selectButton:hover {
