@@ -42,6 +42,13 @@ const MALLogo = () => (
   />
 );
 
+const formatStatusText = (st?: string) => {
+  if (!st) return '';
+  const clean = st.replaceAll('_', ' ');
+  if (clean.toLowerCase() === 'plan to watch') return 'Plan to Watch';
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+};
+
 const AniListLogo = () => (
   <img
     src="https://www.google.com/s2/favicons?domain=anilist.co&sz=128"
@@ -367,7 +374,7 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
                         <div className={styles.previewMeta}>
                           <div className={styles.previewItemTitle}>{item.title}</div>
                           <div className={styles.previewItemBadge}>
-                            {item.media_type} • {item.status.replace('_', ' ')}
+                            {item.media_type?.toUpperCase() === 'TV' ? 'TV Show' : 'Movie'} • {formatStatusText(item.status)}
                           </div>
                         </div>
                       </div>
