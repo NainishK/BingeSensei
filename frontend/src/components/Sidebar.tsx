@@ -75,7 +75,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
     };
 
     const navItems = [
-        { name: 'Overview', icon: LayoutDashboard, path: '/dashboard' },
+        { name: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
         { name: 'Subscriptions', icon: CreditCard, path: '/dashboard/subscriptions' },
         { name: 'Watchlist', icon: TvMinimalPlay, path: '/dashboard/watchlist' },
         { name: 'Recommendations', icon: Sparkles, path: '/dashboard/recommendations' },

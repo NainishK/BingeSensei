@@ -25,16 +25,19 @@ http_session.mount("http://", adapter)
 
 def clean_anime_title(title: str) -> str:
     """
-    Cleans up season suffixes and subtitles for better TMDB matching.
+    Cleans up season suffixes, parentheses, and subtitles for better TMDB matching.
     e.g. 'Re:ZERO -Starting Life in Another World- Season 2' -> 'Re:ZERO -Starting Life in Another World-'
     e.g. 'HAIKYU!! 2nd Season' -> 'HAIKYU!!'
+    e.g. 'Hotaru no Haka to Takahata...' -> 'Hotaru no Haka'
     """
+    cleaned = re.sub(r'\(.*?\)', '', title)
     cleaned = re.sub(
         r'\s*(?:Season\s*\d+|[\d]+(?:st|nd|rd|th)\s*Season|Part\s*\d+|The\s*Final\s*Season|Cour\s*\d+)',
-        '', title, flags=re.IGNORECASE
+        '', cleaned, flags=re.IGNORECASE
     )
-    if ":" in cleaned and len(cleaned.split(":")[0].strip()) >= 3:
-        # Check if base title before colon matches better
+    if " to " in cleaned and len(cleaned.split(" to ")[0].strip()) >= 5:
+        cleaned = cleaned.split(" to ")[0].strip()
+    elif ":" in cleaned and len(cleaned.split(":")[0].strip()) >= 3:
         cleaned = cleaned.split(":")[0].strip()
     return cleaned.strip()
 
@@ -77,7 +80,7 @@ def parse_imdb_csv(contents_str: str) -> List[Dict[str, Any]]:
     return results
 
 
-def parse_letterboxd_csv(contents_str: str) -> List[Dict[str, Any]]:
+def parse_letterboxd_csv(contents_str: str, default_status: str = None) -> List[Dict[str, Any]]:
     """
     Parses Letterboxd watchlist.csv or ratings.csv or watched.csv file.
     Headers: Date, Name, Year, Letterboxd URI, Rating
@@ -102,7 +105,12 @@ def parse_letterboxd_csv(contents_str: str) -> List[Dict[str, Any]]:
             except ValueError:
                 pass
                 
-        status = "watched" if user_rating else "plan_to_watch"
+        if user_rating:
+            status = "watched"
+        elif default_status:
+            status = default_status
+        else:
+            status = "plan_to_watch"
         
         results.append({
             "title": title,
@@ -248,9 +256,52 @@ def fetch_anilist_user_list(username: str) -> List[Dict[str, Any]]:
         return []
 
 
+def score_candidate(r: dict, target_title: str, target_media_type: str, target_year: Any = None) -> float:
+    r_title = (r.get("title") or r.get("name") or "").lower()
+    t_title = target_title.lower()
+    
+    score = 0.0
+    
+    # 1. Exact title match
+    if r_title == t_title:
+        score += 100.0
+    elif t_title in r_title or r_title in t_title:
+        score += 50.0
+
+    # 2. Media type match
+    r_type = r.get("media_type")
+    if r_type == target_media_type:
+        score += 40.0
+
+    # 3. Year match
+    r_year = (r.get("release_date") or r.get("first_air_date") or "")[:4]
+    if target_year and r_year:
+        try:
+            if str(r_year) == str(target_year):
+                score += 50.0
+            elif abs(int(r_year) - int(target_year)) <= 1:
+                score += 25.0
+        except ValueError:
+            pass
+
+    # 4. Poster image presence (Prefer items with posters)
+    if r.get("poster_path"):
+        score += 50.0
+
+    # 5. TMDB Popularity & Vote count
+    pop = r.get("popularity", 0.0)
+    score += min(pop, 30.0)
+    
+    vote_cnt = r.get("vote_count", 0)
+    if vote_cnt > 10:
+        score += 15.0
+
+    return score
+
+
 def resolve_item_to_tmdb(item: Dict[str, Any]) -> Dict[str, Any] | None:
     """
-    Resolves an imported item to TMDB metadata using IMDb ID or Title Search (with fallback clean title search).
+    Resolves an imported item to TMDB metadata using IMDb ID or Title Search (with fallback clean title search and popularity scoring).
     """
     imdb_id = item.get("imdb_id")
     title = item.get("title")
@@ -284,7 +335,7 @@ def resolve_item_to_tmdb(item: Dict[str, Any]) -> Dict[str, Any] | None:
         except Exception as e:
             print(f"[resolve_item_to_tmdb] IMDb lookup failed for {imdb_id}: {e}")
 
-    # Method 2: Search by Title (and clean title fallback)
+    # Method 2: Search by Title (and clean title fallback with smart scoring)
     if title:
         titles_to_try = [title]
         cleaned = clean_anime_title(title)
@@ -296,14 +347,7 @@ def resolve_item_to_tmdb(item: Dict[str, Any]) -> Dict[str, Any] | None:
                 data = tmdb_client.search_multi(query_title)
                 results = [r for r in data.get("results", []) if r.get("media_type") in ["movie", "tv"]]
                 if results:
-                    best_match = results[0]
-                    for r in results:
-                        r_type = r.get("media_type")
-                        r_year = (r.get("release_date") or r.get("first_air_date") or "")[:4]
-                        if r_type == media_type and (not year or r_year == str(year)):
-                            best_match = r
-                            break
-                            
+                    best_match = max(results, key=lambda r: score_candidate(r, query_title, media_type, year))
                     found_media_type = best_match.get("media_type", media_type)
                     return {
                         "tmdb_id": best_match["id"],

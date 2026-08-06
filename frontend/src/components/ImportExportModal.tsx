@@ -179,19 +179,24 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
     imdb: (
       <div>
         <div className={styles.guideHeader}>💡 How to get your IMDb Watchlist file:</div>
-        Go to <b>IMDb.com</b> → Click your profile → <b>Your Watchlist</b> → Scroll to the very bottom → Click <b>"Export this list"</b> (downloads <code>WATCHLIST.csv</code>).
+        Go to <b>IMDb.com</b> → Click your profile → <b>Your Watchlist</b> → Click <b>"Actions"</b> (three dots button at top right) → Select <b>"Export"</b> (downloads a <code>.csv</code> file).
       </div>
     ),
     letterboxd: (
       <div>
         <div className={styles.guideHeader}>💡 How to get your Letterboxd Data:</div>
-        Go to <b>Letterboxd.com</b> → <b>Settings</b> → <b>Import & Export</b> → Click <b>"Export Your Data"</b> (extract <code>watchlist.csv</code> or <code>ratings.csv</code>).
+        <p style={{ margin: 0, lineHeight: 1.5 }}>
+          Go to <b>Letterboxd.com</b> → <b>Settings</b> → <b>DATA</b> tab → Click <b>"EXPORT YOUR DATA"</b> (upload the raw <code>letterboxd-*.zip</code> archive, or individual <code>watchlist.csv</code> / <code>ratings.csv</code> files).
+        </p>
+        <p style={{ marginTop: '0.6rem', marginBottom: 0, fontSize: '0.82rem', lineHeight: 1.55, opacity: 0.9 }}>
+          🔒 <strong>Privacy Note:</strong> BingeSensei only processes <code>watchlist.csv</code>, <code>watched.csv</code>, and <code>ratings.csv</code>. All personal files (profile, comments, reviews) are completely ignored.
+        </p>
       </div>
     ),
     mal: (
       <div>
-        <div className={styles.guideHeader}>💡 How to export MyAnimeList:</div>
-        Go to <b>MyAnimeList.net</b> → <b>Profile / Panel</b> → <b>Export List</b> → Click <b>"Export Anime List"</b> (downloads <code>animelist.xml</code>).
+        <div className={styles.guideHeader}>💡 How to export MyAnimeList file:</div>
+        Go to <b>MyAnimeList.net</b> → <b>Anime List</b> → Click the 📄 <b>"Export"</b> icon on the left sidebar menu → Click <b>"Export My List"</b> (downloads <code>animelist_*.xml.gz</code> archive).
       </div>
     ),
     anilist: (
@@ -254,6 +259,17 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
             </div>
           )}
 
+          {isLoading && step === 'select' && (
+            <div className={styles.guideBox} style={{ borderColor: 'rgba(99, 102, 241, 0.4)', background: 'rgba(99, 102, 241, 0.08)', color: '#c7d2fe', marginBottom: '1.25rem' }}>
+              <div className={styles.guideHeader} style={{ color: '#818cf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Loader2 size={16} className={styles.spinner} /> Fetching & Matching TMDB Metadata...
+              </div>
+              <div>
+                Processing title listings and matching posters in parallel. Large watchlists (500+ items) take a few seconds to complete. Please keep this modal open.
+              </div>
+            </div>
+          )}
+
           {activeTab === 'import' && (
             <>
               {step === 'select' && (
@@ -266,7 +282,7 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
                       <div className={styles.sourceIcon}><ImdbLogo /></div>
                       <div>
                         <div className={styles.sourceName}>IMDb</div>
-                        <div className={styles.sourceFormat}>WATCHLIST.csv</div>
+                        <div className={styles.sourceFormat}>.csv file</div>
                       </div>
                     </button>
 
@@ -277,7 +293,7 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
                       <div className={styles.sourceIcon}><LetterboxdLogo /></div>
                       <div>
                         <div className={styles.sourceName}>Letterboxd</div>
-                        <div className={styles.sourceFormat}>watchlist.csv</div>
+                        <div className={styles.sourceFormat}>.zip or .csv</div>
                       </div>
                     </button>
 
@@ -288,7 +304,7 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
                       <div className={styles.sourceIcon}><MALLogo /></div>
                       <div>
                         <div className={styles.sourceName}>MyAnimeList</div>
-                        <div className={styles.sourceFormat}>animelist.xml</div>
+                        <div className={styles.sourceFormat}>.xml.gz or .xml</div>
                       </div>
                     </button>
 
@@ -319,12 +335,12 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
                     </div>
                   ) : (
                     <label className={`${styles.dropzone} ${file ? styles.dropzoneActive : ''}`}>
-                      <input type="file" accept=".csv,.xml,.json" onChange={handleFileChange} hidden />
+                      <input type="file" accept=".csv,.xml,.xml.gz,.gz,.zip,.json" onChange={handleFileChange} hidden />
                       <Upload className={styles.dropzoneIcon} size={32} />
                       <div className={styles.dropzoneText}>
                         {file ? file.name : 'Click to select or drag & drop export file'}
                       </div>
-                      <div className={styles.dropzoneSubtext}>Supports .csv, .xml, or .json files</div>
+                      <div className={styles.dropzoneSubtext}>Supports .csv, .zip, .xml, .xml.gz, or .json files</div>
                     </label>
                   )}
                 </>
@@ -406,17 +422,29 @@ export default function ImportExportModal({ isOpen, onClose, onSuccess }: Import
         <div className={styles.footer}>
           {activeTab === 'import' && step === 'select' && (
             <button className={styles.submitBtn} onClick={handleParse} disabled={isLoading}>
-              {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Continue →'}
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className={styles.spinner} /> Processing File...
+                </>
+              ) : (
+                'Continue →'
+              )}
             </button>
           )}
 
           {activeTab === 'import' && step === 'preview' && (
             <>
-              <button className={styles.cancelBtn} onClick={() => setStep('select')}>
+              <button className={styles.cancelBtn} onClick={() => setStep('select')} disabled={isLoading}>
                 Back
               </button>
               <button className={styles.submitBtn} onClick={handleConfirmImport} disabled={isLoading}>
-                {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Confirm & Add to Watchlist'}
+                {isLoading ? (
+                  <>
+                    <Loader2 size={16} className={styles.spinner} /> Adding to Watchlist...
+                  </>
+                ) : (
+                  'Confirm & Add to Watchlist'
+                )}
               </button>
             </>
           )}

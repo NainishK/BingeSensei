@@ -29,7 +29,7 @@ export default function AuthCallbackPage() {
             } else {
                 setStatus('Redirecting to dashboard...');
                 setTimeout(() => {
-                    window.location.href = '/dashboard';
+                    window.location.href = '/dashboard/watchlist';
                 }, 800);
             }
         } else if (error) {

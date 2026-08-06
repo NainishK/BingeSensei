@@ -46,7 +46,7 @@ export default function LoginPage() {
 
             localStorage.setItem('token', response.data.access_token);
             // Optional: Add a small delay for the user to see success state if we added one
-            window.location.href = '/dashboard';
+            window.location.href = '/dashboard/watchlist';
         } catch (err: any) {
             if (err.response?.status === 401) {
                 console.warn('Login auth failed (Invalid credentials)');

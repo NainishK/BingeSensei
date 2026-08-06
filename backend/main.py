@@ -807,50 +807,115 @@ async def parse_import_file(
     file: UploadFile = File(...),
     source_type: str = Form("auto")
 ):
-    import import_export, json
+    import import_export, json, gzip, zipfile, io
     contents = await file.read()
-    contents_str = contents.decode('utf-8', errors='ignore')
-    
-    parsed_items = []
     filename = file.filename.lower() if file.filename else ""
+
+    # Decompress gzip files (.gz / .xml.gz / b'\x1f\x8b' header)
+    if filename.endswith(".gz") or contents.startswith(b'\x1f\x8b'):
+        try:
+            contents = gzip.decompress(contents)
+        except Exception as e:
+            print(f"[parse_import_file] Error decompressing gzip: {e}")
+
+    # Extract zip archives (.zip / Letterboxd export)
+    contents_str = ""
+    zip_parsed_items = []
+
+    if filename.endswith(".zip") or contents.startswith(b'PK\x03\x04'):
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as z:
+                zip_files = z.namelist()
+                all_zip_map = {}
+
+                # Letterboxd Zip Archive Parsing Order
+                # 1. watchlist.csv (default_status = plan_to_watch)
+                # 2. watched.csv (default_status = watched)
+                # 3. ratings.csv (default_status = watched + user_rating)
+                file_status_mapping = [
+                    ("watchlist.csv", "plan_to_watch"),
+                    ("watched.csv", "watched"),
+                    ("ratings.csv", "watched")
+                ]
+
+                found_any = False
+                for target_name, def_status in file_status_mapping:
+                    matched = [f for f in zip_files if f.lower().endswith(target_name)]
+                    if matched:
+                        found_any = True
+                        c_str = z.read(matched[0]).decode('utf-8', errors='ignore')
+                        c_items = import_export.parse_letterboxd_csv(c_str, default_status=def_status)
+                        for item in c_items:
+                            key = f"{item['title'].lower()}_{item.get('year', '')}"
+                            if key not in all_zip_map:
+                                all_zip_map[key] = item
+                            else:
+                                if item.get('user_rating'):
+                                    all_zip_map[key]['user_rating'] = item['user_rating']
+                                    all_zip_map[key]['status'] = 'watched'
+                                if item.get('status') == 'watched':
+                                    all_zip_map[key]['status'] = 'watched'
+
+                if not found_any:
+                    # Fallback to any .csv in zip
+                    csv_files = [f for f in zip_files if f.lower().endswith(".csv")]
+                    if csv_files:
+                        c_str = z.read(csv_files[0]).decode('utf-8', errors='ignore')
+                        zip_parsed_items = import_export.parse_letterboxd_csv(c_str)
+                else:
+                    zip_parsed_items = list(all_zip_map.values())
+        except Exception as e:
+            print(f"[parse_import_file] Error reading zip archive: {e}")
+    else:
+        contents_str = contents.decode('utf-8', errors='ignore')
+
+    parsed_items = zip_parsed_items
     
-    if source_type == "imdb" or ("watchlist" in filename or "ratings" in filename) and filename.endswith(".csv"):
-        parsed_items = import_export.parse_imdb_csv(contents_str)
-        if not parsed_items:
-            parsed_items = import_export.parse_letterboxd_csv(contents_str)
-    elif source_type == "letterboxd" or ("watched" in filename) and filename.endswith(".csv"):
-        parsed_items = import_export.parse_letterboxd_csv(contents_str)
-    elif source_type == "mal" or filename.endswith(".xml"):
-        parsed_items = import_export.parse_mal_xml(contents_str)
-    elif filename.endswith(".json"):
+    if not parsed_items:
+        if source_type == "imdb" or ("Const" in contents_str and "Title" in contents_str):
+            parsed_items = import_export.parse_imdb_csv(contents_str)
+            if not parsed_items:
+                parsed_items = import_export.parse_letterboxd_csv(contents_str)
+        elif source_type == "letterboxd" or ("Letterboxd URI" in contents_str or ("Date" in contents_str and "Name" in contents_str)):
+            def_stat = "watched" if ("watched" in filename or "ratings" in filename) else "plan_to_watch"
+            parsed_items = import_export.parse_letterboxd_csv(contents_str, default_status=def_stat)
+        elif source_type == "mal" or "<anime>" in contents_str or "<myanimelist>" in contents_str or filename.endswith(".xml") or filename.endswith(".gz"):
+            parsed_items = import_export.parse_mal_xml(contents_str)
+    elif filename.endswith(".json") or contents_str.strip().startswith("[") or contents_str.strip().startswith("{"):
         try:
             raw_json = json.loads(contents_str)
             if isinstance(raw_json, list):
                 parsed_items = raw_json
+            elif isinstance(raw_json, dict) and "items" in raw_json:
+                parsed_items = raw_json["items"]
         except Exception:
             pass
+
+    # Fallback auto detection if parsed_items is still empty
+    if not parsed_items:
+        if "<anime>" in contents_str or "<myanimelist>" in contents_str:
+            parsed_items = import_export.parse_mal_xml(contents_str)
+        elif "Const" in contents_str or "IMDb" in contents_str:
+            parsed_items = import_export.parse_imdb_csv(contents_str)
+        elif "Letterboxd" in contents_str or "Name" in contents_str:
+            parsed_items = import_export.parse_letterboxd_csv(contents_str)
             
-    resolved_results = []
-    import time
-    for item in parsed_items[:2000]: # Supports full watchlists up to 2,000 items
-        res = import_export.resolve_item_to_tmdb(item)
-        if res:
-            resolved_results.append(res)
-        time.sleep(0.005)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(import_export.resolve_item_to_tmdb, item) for item in parsed_items[:2000]]
+        resolved_results = [f.result() for f in futures if f.result()]
             
     deduped = import_export.deduplicate_resolved_items(resolved_results)
     return {"total_found": len(parsed_items), "resolved_items": deduped}
 
 @app.post("/watchlist/import/anilist")
 def parse_anilist_import(username: str = Form(...)):
-    import import_export, time
+    import import_export
+    from concurrent.futures import ThreadPoolExecutor
     items = import_export.fetch_anilist_user_list(username)
-    resolved_results = []
-    for item in items[:2000]: # Supports full watchlists up to 2,000 items
-        res = import_export.resolve_item_to_tmdb(item)
-        if res:
-            resolved_results.append(res)
-        time.sleep(0.005)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(import_export.resolve_item_to_tmdb, item) for item in items[:2000]]
+        resolved_results = [f.result() for f in futures if f.result()]
             
     deduped = import_export.deduplicate_resolved_items(resolved_results)
     return {"total_found": len(items), "resolved_items": deduped}
