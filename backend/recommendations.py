@@ -522,18 +522,21 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
 
 def get_similar_content(db: Session, user_id: int, force_refresh: bool = False):
     """
-    Slow recommendations: Similar content based on watched history.
+    Recommendations: Similar content based on watched history and discovery.
     Tries cache first, then calculates if missing.
     """
     user = db.query(models.User).filter(models.User.id == user_id).first()
     country = user.country if user and user.country else "US"
     
-    if not force_refresh:
+    if force_refresh:
+        print(f"[RECS] Force refresh requested for user {user_id}. Invalidating cache...")
+        clear_user_cache(db, user_id)
+    else:
         cached = get_cached_data(db, user_id, f"similar_{country}")
-        if cached is not None:
+        if cached is not None and len(cached) >= 4:
             return cached
 
-    # Calculate
+    # Calculate fresh recommendations
     recs = calculate_similar_content(db, user_id, country)
     
     if recs:
@@ -542,16 +545,17 @@ def get_similar_content(db: Session, user_id: int, force_refresh: bool = False):
     return recs
 
 def calculate_similar_content(db: Session, user_id: int, country: str):
-    # 0. Get User Context (Passed in)
-    # user = db.query(models.User).filter(models.User.id == user_id).first()
-    # country = user.country if user and user.country else "US"
-
     def get_service_logo(name, user_country):
+        if not name: return None
         service = db.query(models.Service).filter(
             models.Service.name == name,
             ((models.Service.country == user_country) | (models.Service.country == "US"))
         ).order_by(models.Service.country == user_country).first()
-        return service.logo_url if service else None
+        if service and service.logo_url:
+            return service.logo_url
+        clean_name = name.replace("Available on ", "").strip()
+        slug = clean_name.lower().replace(" ", "").replace("+", "plus")
+        return f"https://www.google.com/s2/favicons?sz=128&domain={slug}.com"
 
     watchlist = db.query(models.WatchlistItem).filter(models.WatchlistItem.user_id == user_id).all()
     subscriptions = db.query(models.Subscription).filter(
@@ -560,38 +564,11 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
         models.Subscription.category == 'OTT',
         models.Subscription.country == country
     ).all()
-    
-    if not subscriptions:
-        pass # Allow fallbacks
 
-    recommendations = []
+    watchlist_tmdb_ids = {w.tmdb_id for w in watchlist}
     recommended_ids = set()
-    
-    # --- Strategy A: Interest Discovery (Top Genres) ---
-    interests = db.query(models.UserInterest).filter(models.UserInterest.user_id == user_id).order_by(models.UserInterest.score.desc()).limit(2).all()
-    
-    # FALLBACK: If no explicit interests, derive from Watchlist or Default
-    if not interests:
-        from collections import Counter
-        genre_counter = Counter()
-        for w in watchlist:
-            if w.genre_ids:
-                try:
-                    g_ids = json.loads(w.genre_ids)
-                    if isinstance(g_ids, list):
-                        genre_counter.update(g_ids)
-                except: pass
-        
-        if genre_counter:
-            top_genes = genre_counter.most_common(2) # [(id, count), ...]
-            class MockInterest:
-                def __init__(self, gid): self.genre_id = gid
-            interests = [MockInterest(g[0]) for g in top_genes]
-        else:
-            class MockInterest:
-                def __init__(self, gid): self.genre_id = gid
-            interests = [MockInterest(28), MockInterest(35)]
-    
+    recommendations = []
+
     # Map subscription IDs
     PROVIDER_IDS_MAP = {
         "netflix": "8",
@@ -601,7 +578,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
         "max": "384|312",
         "peacock": "386",
         "apple tv plus": "350",
-        "apple tv+": "350", # Exact match
+        "apple tv+": "350",
         "paramount plus": "83|531",
         "crunchyroll": "283",
         "hotstar": "122",
@@ -609,163 +586,63 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
         "jiocinema": "220",
         "jiohotstar": "122|220"
     }
-    
-    valid_provider_ids = set()
-    for sub in subscriptions:
-        key = sub.service_name.lower()
-        if key in PROVIDER_IDS_MAP:
-            valid_provider_ids.add(PROVIDER_IDS_MAP[key])
-        else:
-            for k, v in PROVIDER_IDS_MAP.items():
-                if k in key or key in k: valid_provider_ids.add(v)
-                    
-    provider_string = "|".join(valid_provider_ids) if valid_provider_ids else None
-    
-    available_recs = []
-    explore_recs = []
-    
-    for interest in interests:
-        # 1. Available Content Query
-        data_avail = tmdb_client.discover_media(
-            "movie", 
-            with_genres=str(interest.genre_id), 
-            sort_by="vote_average.desc", 
-            min_vote_count=200, 
-            min_vote_average=6.0,
-            with_watch_providers=provider_string,
-            watch_region=country
-        )
-        
-        items = data_avail.get("results", [])[:20]
-        random.shuffle(items)
-        
-        count = 0
-        for item in items:
-            if count >= 15: break 
-            tmdb_id = item.get("id")
-            if tmdb_id in recommended_ids: continue
-            if any(w.tmdb_id == tmdb_id for w in watchlist): continue
-            
-            providers = tmdb_client.get_watch_providers("movie", tmdb_id, region=country)
-            matched_sub = None
-            if "flatrate" in providers:
-                for p in providers["flatrate"]:
-                    for sub in subscriptions:
-                        if sub.service_name.lower() in p["provider_name"].lower():
-                            matched_sub = sub.service_name
-                            break
-                    if matched_sub: break
-            
-            if matched_sub:
-                available_recs.append({
-                    "type": "discovery",
-                    "service_name": matched_sub,
-                    "logo_url": get_service_logo(matched_sub, country),
-                    "items": [item.get("title")],
-                    "reason": "Included in your subscription",
-                    "score": 90 + item.get("vote_average", 0),
-                    "tmdb_id": tmdb_id,
-                    "media_type": "movie",
-                    "poster_path": item.get("poster_path"),
-                    "vote_average": item.get("vote_average"),
-                    "overview": item.get("overview"),
-                    "original_language": item.get("original_language"),
-                    "genre_ids": item.get("genre_ids", [])
-                })
-                recommended_ids.add(tmdb_id)
-                count += 1
-        
-        # Explore Content (Not on subs)
-        data_explore = tmdb_client.discover_media(
-            "movie",
-            with_genres=str(interest.genre_id),
-            sort_by="vote_average.desc",
-            min_vote_count=500,
-            min_vote_average=7.0,
-            watch_region=country
-        )
-        items_explore = data_explore.get("results", [])[:15]
-        
-        for item in items_explore:
-            tmdb_id = item.get("id")
-            if tmdb_id in recommended_ids: continue
-            if any(w.tmdb_id == tmdb_id for w in watchlist): continue
-            
-            providers = tmdb_client.get_watch_providers("movie", tmdb_id, region=country)
-            external_service = None
-            on_existing = False
-            
-            if "flatrate" in providers:
-                for p in providers["flatrate"]:
-                    p_name = p["provider_name"]
-                    for sub in subscriptions:
-                        if sub.service_name.lower() in p_name.lower():
-                            on_existing = True
-                            break
-                    if on_existing: break
-                    
-                    p_name_lower = p_name.lower()
-                    if any(s in p_name_lower for s in ["netflix", "hulu", "amazon", "disney", "max", "apple", "peacock", "paramount"]):
-                         external_service = p_name
-                         break
-            
-            if not on_existing and external_service:
-                explore_recs.append({
-                    "type": "discovery_explore",
-                    "service_name": external_service,
-                    "logo_url": get_service_logo(external_service, country),
-                    "items": [item.get("title")],
-                    "reason": f"Available on {external_service}",
-                    "score": 88 + item.get("vote_average", 0),
-                    "tmdb_id": tmdb_id,
-                    "media_type": "movie",
-                    "poster_path": item.get("poster_path"),
-                    "vote_average": item.get("vote_average"),
-                    "overview": item.get("overview"),
-                    "original_language": item.get("original_language"),
-                    "genre_ids": item.get("genre_ids", [])
-                })
 
-    # --- Strategy B: Similar Content ---
+    # Helper to resolve provider info for candidate
+    def resolve_provider_info(tmdb_id: int, m_type: str):
+        providers = tmdb_client.get_watch_providers(m_type, tmdb_id, region=country)
+        flatrate = providers.get("flatrate", [])
+        
+        # 1. Try to match active user subscription
+        for p in flatrate:
+            p_name = p.get("provider_name", "")
+            p_id = str(p.get("provider_id", ""))
+            
+            for sub in subscriptions:
+                s_name_key = sub.service_name.lower()
+                mapped_ids = PROVIDER_IDS_MAP.get(s_name_key, "").split("|") if s_name_key in PROVIDER_IDS_MAP else []
+                if not mapped_ids:
+                    for k, v in PROVIDER_IDS_MAP.items():
+                        if k in s_name_key or s_name_key in k:
+                            mapped_ids = v.split("|")
+                            break
+                
+                if p_id in mapped_ids or sub.service_name.lower() in p_name.lower() or p_name.lower() in sub.service_name.lower():
+                    return sub.service_name, True
+                    
+        # 2. Return general provider name
+        if flatrate and len(flatrate) > 0:
+            return flatrate[0].get("provider_name"), False
+            
+        return "Popular Streaming", False
+
+    # --- Strategy A: Similar Content to Watchlist ---
     seeds = []
     for w in watchlist:
         weight = (w.user_rating * 2) if w.user_rating else (5 if w.status == "watched" else 3)
         seeds.append((w, weight))
     seeds.sort(key=lambda x: x[1], reverse=True)
-    top_seeds = [s[0] for s in seeds[:10]]
+    top_seeds = [s[0] for s in seeds[:12]]
     random.shuffle(top_seeds)
-    
-    similar_recs = []
+
     for seed in top_seeds:
-        if len(similar_recs) >= 15: break
-        
-        sim_data = tmdb_client.get_similar(seed.media_type, seed.tmdb_id)
-        candidates = [c for c in sim_data.get("results", []) if c.get("vote_average", 0) >= 6.0]
-        random.shuffle(candidates)
-        
-        for sim in candidates:
-            sim_id = sim.get("id")
-            if sim_id in recommended_ids: continue
-            if any(w.tmdb_id == sim_id for w in watchlist): continue
-             
-            providers = tmdb_client.get_watch_providers(seed.media_type, sim_id, region=country)
-            matched_sub = None
-            if "flatrate" in providers:
-                for p in providers["flatrate"]:
-                    for sub in subscriptions:
-                        if sub.service_name.lower() in p["provider_name"].lower():
-                            matched_sub = sub.service_name
-                            break
-                    if matched_sub: break
+        if len(recommendations) >= 16: break
+        try:
+            sim_data = tmdb_client.get_similar(seed.media_type, seed.tmdb_id)
+            candidates = [c for c in sim_data.get("results", []) if c.get("vote_average", 0) >= 5.5]
+            random.shuffle(candidates)
             
-            if matched_sub:
-                similar_recs.append({
+            for sim in candidates:
+                sim_id = sim.get("id")
+                if sim_id in recommended_ids or sim_id in watchlist_tmdb_ids: continue
+                
+                prov_name, is_on_sub = resolve_provider_info(sim_id, seed.media_type)
+                recommendations.append({
                     "type": "similar",
-                    "service_name": matched_sub,
-                    "logo_url": get_service_logo(matched_sub, country),
+                    "service_name": prov_name,
+                    "logo_url": get_service_logo(prov_name, country),
                     "items": [sim.get("title") or sim.get("name")],
-                    "reason": f"Because you liked {seed.title}",
-                    "score": 75 + sim.get("vote_average", 0),
+                    "reason": f"Because you liked {seed.title}" if seed.user_rating else f"Similar to {seed.title}",
+                    "score": (90 if is_on_sub else 75) + sim.get("vote_average", 0),
                     "tmdb_id": sim_id,
                     "media_type": seed.media_type,
                     "poster_path": sim.get("poster_path"),
@@ -775,83 +652,89 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
                     "genre_ids": sim.get("genre_ids", [])
                 })
                 recommended_ids.add(sim_id)
-                break 
+                break
+        except Exception as e:
+            print(f"[RECS] Error getting similar for {seed.title}: {e}")
 
-    # --- Clustering Explore Recs ---
-    service_counts = {}
-    for r in explore_recs:
-        s = r["service_name"]
-        service_counts[s] = service_counts.get(s, 0) + 1
+    # --- Strategy B: Interest / Genre Discovery ---
+    if len(recommendations) < 20:
+        from collections import Counter
+        genre_counter = Counter()
+        for w in watchlist:
+            if w.genre_ids:
+                try:
+                    g_ids = json.loads(w.genre_ids) if isinstance(w.genre_ids, str) else w.genre_ids
+                    if isinstance(g_ids, list):
+                        genre_counter.update(g_ids)
+                except: pass
         
-    best_external_service = None
-    if service_counts:
-        best_external_service = max(service_counts, key=service_counts.get)
-    
-    final_explore = []
-    if best_external_service:
-        final_explore = [r for r in explore_recs if r["service_name"] == best_external_service][:2]
-        for r in final_explore:
-            recommended_ids.add(r["tmdb_id"])
+        top_genres = [g[0] for g in genre_counter.most_common(3)] or [28, 35, 18, 16] # Action, Comedy, Drama, Animation
+        
+        for g_id in top_genres:
+            if len(recommendations) >= 20: break
+            for m_type in ["movie", "tv"]:
+                if len(recommendations) >= 20: break
+                try:
+                    disc = tmdb_client.discover_media(m_type, with_genres=str(g_id), sort_by="popularity.desc", min_vote_count=150, watch_region=country)
+                    results = disc.get("results", [])
+                    random.shuffle(results)
+                    for item in results[:10]:
+                        t_id = item.get("id")
+                        if t_id in recommended_ids or t_id in watchlist_tmdb_ids: continue
+                        
+                        prov_name, is_on_sub = resolve_provider_info(t_id, m_type)
+                        recommendations.append({
+                            "type": "discovery",
+                            "service_name": prov_name,
+                            "logo_url": get_service_logo(prov_name, country),
+                            "items": [item.get("title") or item.get("name")],
+                            "reason": "Recommended for your taste",
+                            "score": (85 if is_on_sub else 70) + item.get("vote_average", 0),
+                            "tmdb_id": t_id,
+                            "media_type": m_type,
+                            "poster_path": item.get("poster_path"),
+                            "vote_average": item.get("vote_average"),
+                            "overview": item.get("overview"),
+                            "original_language": item.get("original_language"),
+                            "genre_ids": item.get("genre_ids", [])
+                        })
+                        recommended_ids.add(t_id)
+                        if len(recommendations) >= 20: break
+                except Exception as e:
+                    print(f"[RECS] Error discovering genre {g_id}: {e}")
 
-    # Combine
-    unique_candidates = []
-    seen = set()
-    current_pool = available_recs + similar_recs + final_explore
-    random.shuffle(current_pool)
-    
-    for c in current_pool:
-        if c["tmdb_id"] not in seen:
-            unique_candidates.append(c)
-            seen.add(c["tmdb_id"])
-
-    # --- Strategy C: Trending Fallback (Fill up to 25 items) ---
-    if len(unique_candidates) < 35:
-        print(f"[RECS] Low results ({len(unique_candidates)}), fetching global trending fallback...")
-        try:
-             # Fetch Trending (Global or Provider)
-             trending_data = tmdb_client.discover_media("movie", sort_by="popularity.desc", watch_region=country, with_watch_providers=provider_string)
-             trending_items = trending_data.get("results", [])[:30]
-             
-             for item in trending_items:
-                 if len(unique_candidates) >= 35: break
-                 
-                 tmdb_id = item.get("id")
-                 if tmdb_id in seen: continue
-                 if any(w.tmdb_id == tmdb_id for w in watchlist): continue
-                 
-                 providers = tmdb_client.get_watch_providers("movie", tmdb_id, region=country)
-                 matched_sub = None
-                 if "flatrate" in providers:
-                     for p in providers["flatrate"]:
-                         p_name = p["provider_name"]
-                         for sub in subscriptions:
-                             if sub.service_name.lower() in p_name.lower():
-                                 matched_sub = sub.service_name
-                                 break
-                         if matched_sub: break
-                 
-                 if not matched_sub and not provider_string:
-                     matched_sub = "Available Globally"
-                     if "flatrate" in providers and len(providers["flatrate"]) > 0:
-                         matched_sub = f"Available on {providers['flatrate'][0]['provider_name']}"
-
-                 if matched_sub:
-                     unique_candidates.append({
+    # --- Strategy C: Trending Fallback (Guarantees 20+ items) ---
+    if len(recommendations) < 20:
+        for m_type in ["movie", "tv"]:
+            if len(recommendations) >= 24: break
+            try:
+                trend = tmdb_client.discover_media(m_type, sort_by="popularity.desc", min_vote_count=200, watch_region=country)
+                results = trend.get("results", [])
+                random.shuffle(results)
+                for item in results[:15]:
+                    t_id = item.get("id")
+                    if t_id in recommended_ids or t_id in watchlist_tmdb_ids: continue
+                    
+                    prov_name, is_on_sub = resolve_provider_info(t_id, m_type)
+                    recommendations.append({
                         "type": "trending",
-                        "service_name": matched_sub,
-                        "logo_url": get_service_logo(matched_sub.replace("Available on ", ""), country) if matched_sub != "Available Globally" else None,
-                        "items": [item.get("title")],
-                        "reason": "Top Trending on your services" if provider_string else "Trending Worldwide",
-                        "score": 85 + (item.get("popularity", 0) / 500),
-                        "tmdb_id": tmdb_id,
-                        "media_type": "movie",
+                        "service_name": prov_name,
+                        "logo_url": get_service_logo(prov_name, country),
+                        "items": [item.get("title") or item.get("name")],
+                        "reason": "Top Trending in your region",
+                        "score": 60 + item.get("vote_average", 0),
+                        "tmdb_id": t_id,
+                        "media_type": m_type,
                         "poster_path": item.get("poster_path"),
                         "vote_average": item.get("vote_average"),
-                        "overview": item.get("overview")
-                     })
-                     seen.add(tmdb_id)
-        except Exception as e:
-            print(f"[RECS] Error fetching trending fallback: {e}")
+                        "overview": item.get("overview"),
+                        "original_language": item.get("original_language"),
+                        "genre_ids": item.get("genre_ids", [])
+                    })
+                    recommended_ids.add(t_id)
+                    if len(recommendations) >= 24: break
+            except Exception as e:
+                print(f"[RECS] Error fetching trending {m_type}: {e}")
 
-    random.shuffle(unique_candidates)
-    return unique_candidates[:25]
+    random.shuffle(recommendations)
+    return recommendations[:24]
