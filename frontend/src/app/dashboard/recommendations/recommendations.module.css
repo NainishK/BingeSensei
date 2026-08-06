@@ -52,6 +52,42 @@
     margin-bottom: 1.5rem;
 }
 
+/* Filter Pills */
+.filterPills {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.filterPill {
+    background: var(--muted, rgba(255, 255, 255, 0.05));
+    color: var(--muted-foreground, #94a3b8);
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+    border-radius: 20px;
+    padding: 0.45rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.filterPill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--foreground, #f8fafc);
+}
+
+.filterPillActive {
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    color: #ffffff !important;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
 .sectionTitle {
     font-size: 1rem;
     /* Compact Mobile Base */

@@ -42,7 +42,8 @@ export default function RecommendationsPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [showAIModal, setShowAIModal] = useState(false);
     const [trendingIndex, setTrendingIndex] = useState(0);
-    const [userCountry, setUserCountry] = useState('US'); // Default to US to prevent hydration mismatch, or better yet, wait for load?
+    const [userCountry, setUserCountry] = useState('US');
+    const [filterTab, setFilterTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
 
     // Deletion State
     const [itemToRemove, setItemToRemove] = useState<{ id: number; title: string } | null>(null);
@@ -285,6 +286,29 @@ export default function RecommendationsPage() {
                     </button>
                 </div>
 
+                {similarRecs.length > 0 && (
+                    <div className={styles.filterPills}>
+                        <button
+                            className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
+                            onClick={() => setFilterTab('all')}
+                        >
+                            ✨ All Picks ({similarRecs.length})
+                        </button>
+                        <button
+                            className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                            onClick={() => setFilterTab('subscriptions')}
+                        >
+                            📺 On My Subscriptions
+                        </button>
+                        <button
+                            className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
+                            onClick={() => setFilterTab('explore')}
+                        >
+                            🌐 Worldwide & Explore
+                        </button>
+                    </div>
+                )}
+
                 {loadingSimilar && similarRecs.length === 0 ? (
                     <div className={styles.emptyState}>
                         <Sparkles size={48} style={{ opacity: 0.2 }} />
@@ -292,47 +316,58 @@ export default function RecommendationsPage() {
                     </div>
                 ) : similarRecs.length > 0 ? (
                     <div className={styles.grid}>
-                        {similarRecs.slice(0, 20).map((rec, index) => {
-                            const item: MediaItem = {
-                                id: rec.tmdb_id || 0,
-                                title: rec.items[0],
-                                media_type: rec.media_type || 'movie',
-                                overview: rec.overview || '',
-                                poster_path: rec.poster_path,
-                                vote_average: rec.vote_average,
-                                genre_ids: rec.genre_ids,
-                                original_language: rec.original_language
-                            };
-                            const existingItem = watchlist.find(w => w.tmdb_id === item.id);
+                        {similarRecs
+                            .filter(rec => {
+                                if (filterTab === 'subscriptions') {
+                                    return rec.type === 'discovery' || (rec.service_name && !rec.service_name.startsWith('Available on'));
+                                }
+                                if (filterTab === 'explore') {
+                                    return rec.type === 'trending' || rec.type === 'discovery_explore' || (rec.service_name && rec.service_name.startsWith('Available on'));
+                                }
+                                return true;
+                            })
+                            .slice(0, 24)
+                            .map((rec, index) => {
+                                const item: MediaItem = {
+                                    id: rec.tmdb_id || 0,
+                                    title: rec.items[0],
+                                    media_type: rec.media_type || 'movie',
+                                    overview: rec.overview || '',
+                                    poster_path: rec.poster_path,
+                                    vote_average: rec.vote_average,
+                                    genre_ids: rec.genre_ids,
+                                    original_language: rec.original_language
+                                };
+                                const existingItem = watchlist.find(w => w.tmdb_id === item.id);
 
-                            if (existingItem) {
-                                item.dbId = existingItem.id;
-                                item.user_rating = existingItem.user_rating;
-                                item.status = existingItem.status;
-                                item.current_season = existingItem.current_season;
-                                item.current_episode = existingItem.current_episode;
-                                item.notes = existingItem.notes;
-                            }
+                                if (existingItem) {
+                                    item.dbId = existingItem.id;
+                                    item.user_rating = existingItem.user_rating;
+                                    item.status = existingItem.status;
+                                    item.current_season = existingItem.current_season;
+                                    item.current_episode = existingItem.current_episode;
+                                    item.notes = existingItem.notes;
+                                }
 
-                            return (
-                                <div key={index} className={styles.recommendationItem}>
-                                    <div className={styles.reasonHeader} title={rec.reason}>
-                                        <div className={styles.reasonBadge}>
-                                            <Lightbulb size={14} style={{ flexShrink: 0, marginTop: 2 }} />
-                                            {rec.reason}
+                                return (
+                                    <div key={index} className={styles.recommendationItem}>
+                                        <div className={styles.reasonHeader} title={rec.reason}>
+                                            <div className={styles.reasonBadge}>
+                                                <Lightbulb size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+                                                {rec.reason}
+                                            </div>
                                         </div>
+                                        <MediaCard
+                                            item={item}
+                                            existingStatus={existingItem?.status}
+                                            onAddSuccess={fetchWatchlist}
+                                            showServiceBadge={rec.service_name}
+                                            onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
+                                            onStatusChange={() => fetchWatchlist()}
+                                        />
                                     </div>
-                                    <MediaCard
-                                        item={item}
-                                        existingStatus={existingItem?.status}
-                                        onAddSuccess={fetchWatchlist}
-                                        showServiceBadge={rec.service_name}
-                                        onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
-                                        onStatusChange={() => fetchWatchlist()}
-                                    />
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
                     </div>
                 ) : (
                     <div className={styles.emptyState}>

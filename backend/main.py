@@ -901,7 +901,7 @@ async def parse_import_file(
             parsed_items = import_export.parse_letterboxd_csv(contents_str)
             
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(import_export.resolve_item_to_tmdb, item) for item in parsed_items[:2000]]
         resolved_results = [f.result() for f in futures if f.result()]
             
@@ -913,12 +913,22 @@ def parse_anilist_import(username: str = Form(...)):
     import import_export
     from concurrent.futures import ThreadPoolExecutor
     items = import_export.fetch_anilist_user_list(username)
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(import_export.resolve_item_to_tmdb, item) for item in items[:2000]]
         resolved_results = [f.result() for f in futures if f.result()]
             
     deduped = import_export.deduplicate_resolved_items(resolved_results)
     return {"total_found": len(items), "resolved_items": deduped}
+
+def run_bg_refresh(user_id: int):
+    bg_db = SessionLocal()
+    try:
+        import recommendations
+        recommendations.refresh_recommendations(bg_db, user_id, force=True)
+    except Exception as e:
+        print(f"[BG_REFRESH] Error in background recommendations refresh: {e}")
+    finally:
+        bg_db.close()
 
 @app.post("/watchlist/import/confirm")
 def confirm_import_items(
@@ -930,21 +940,22 @@ def confirm_import_items(
     imported_count = 0
     skipped_count = 0
     
+    # Single bulk query for existing items to prevent 500 DB queries and pool exhaustion
+    existing_tmdb_ids = set(
+        r[0] for r in db.query(models.WatchlistItem.tmdb_id)
+        .filter(models.WatchlistItem.user_id == current_user.id).all()
+    )
+    
     for item in items:
-        existing = db.query(models.WatchlistItem).filter(
-            models.WatchlistItem.user_id == current_user.id,
-            models.WatchlistItem.tmdb_id == item.tmdb_id
-        ).first()
-        
-        if existing:
+        if item.tmdb_id in existing_tmdb_ids:
             skipped_count += 1
             continue
             
         crud.create_watchlist_item(db=db, item=item, user_id=current_user.id, skip_availability_fetch=True)
+        existing_tmdb_ids.add(item.tmdb_id)
         imported_count += 1
         
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    background_tasks.add_task(run_bg_refresh, current_user.id)
     
     return {"imported": imported_count, "skipped": skipped_count}
 
