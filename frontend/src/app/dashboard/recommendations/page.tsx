@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import api from '@/lib/api';
 import styles from './recommendations.module.css';
 import { Recommendation } from '@/lib/types';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Tv, Globe, Layers } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import AIInsightsModal from '@/components/AIInsightsModal';
 import { formatCurrency } from '@/lib/currency';
@@ -42,7 +42,9 @@ export default function RecommendationsPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [showAIModal, setShowAIModal] = useState(false);
     const [trendingIndex, setTrendingIndex] = useState(0);
-    const [userCountry, setUserCountry] = useState('US'); // Default to US to prevent hydration mismatch, or better yet, wait for load?
+    const [userCountry, setUserCountry] = useState('US');
+    const [userSubscriptions, setUserSubscriptions] = useState<string[]>([]);
+    const [filterTab, setFilterTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
 
     // Deletion State
     const [itemToRemove, setItemToRemove] = useState<{ id: number; title: string } | null>(null);
@@ -50,7 +52,22 @@ export default function RecommendationsPage() {
     useEffect(() => {
         fetchWatchlist();
         fetchUserProfile();
+        fetchUserSubscriptions();
     }, []);
+
+    const fetchUserSubscriptions = async () => {
+        try {
+            const response = await api.get('/subscriptions/');
+            if (Array.isArray(response.data)) {
+                const activeNames = response.data
+                    .filter((s: any) => s.is_active)
+                    .map((s: any) => s.service_name.toLowerCase().trim());
+                setUserSubscriptions(activeNames);
+            }
+        } catch (error) {
+            console.error('Failed to fetch user subscriptions for filter', error);
+        }
+    };
 
     const fetchUserProfile = async () => {
         try {
@@ -111,8 +128,6 @@ export default function RecommendationsPage() {
     const handleRefresh = async () => {
         setRefreshing(true);
         try {
-            // Refresh both dashboard and similar content
-            await api.post('/recommendations/refresh');
             await refreshRecommendations(true);
         } catch (error) {
             console.error(error);
@@ -285,14 +300,65 @@ export default function RecommendationsPage() {
                     </button>
                 </div>
 
-                {loadingSimilar && similarRecs.length === 0 ? (
-                    <div className={styles.emptyState}>
-                        <Sparkles size={48} style={{ opacity: 0.2 }} />
-                        <p>Finding personalized recommendations...</p>
-                    </div>
-                ) : similarRecs.length > 0 ? (
-                    <div className={styles.grid}>
-                        {similarRecs.slice(0, 20).map((rec, index) => {
+                {(() => {
+                    const isRecOnSub = (rec: Recommendation) => {
+                        if (typeof rec.is_on_sub === 'boolean') return rec.is_on_sub;
+                        if (!rec.service_name) return false;
+                        const name = rec.service_name.toLowerCase().trim();
+                        if (name === 'popular streaming' || name.startsWith('available on')) return false;
+                        if (userSubscriptions.length > 0) {
+                            return userSubscriptions.some(sub => {
+                                const cleanSub = sub.replace(/\s*(plus|\+)\s*/g, '').toLowerCase().trim();
+                                const cleanRec = name.replace(/\s*(plus|\+)\s*/g, '').toLowerCase().trim();
+                                return cleanRec.includes(cleanSub) || cleanSub.includes(cleanRec);
+                            });
+                        }
+                        return true;
+                    };
+
+                    const subCount = similarRecs.filter(isRecOnSub).length;
+                    const exploreCount = similarRecs.filter(r => !isRecOnSub(r)).length;
+
+                    const filteredRecs = similarRecs.filter(rec => {
+                        const isOnSub = isRecOnSub(rec);
+                        if (filterTab === 'subscriptions') return isOnSub;
+                        if (filterTab === 'explore') return !isOnSub;
+                        return true;
+                    }).slice(0, 24);
+
+                    return (
+                        <>
+                            {similarRecs.length > 0 && (
+                                <div className={styles.filterPills}>
+                                    <button
+                                        className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
+                                        onClick={() => setFilterTab('all')}
+                                    >
+                                        <Layers size={14} /> All Picks ({similarRecs.length})
+                                    </button>
+                                    <button
+                                        className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                                        onClick={() => setFilterTab('subscriptions')}
+                                    >
+                                        <Tv size={14} /> On My Subscriptions ({subCount})
+                                    </button>
+                                    <button
+                                        className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
+                                        onClick={() => setFilterTab('explore')}
+                                    >
+                                        <Globe size={14} /> Worldwide & Explore ({exploreCount})
+                                    </button>
+                                </div>
+                            )}
+
+                            {loadingSimilar && similarRecs.length === 0 ? (
+                                <div className={styles.emptyState}>
+                                    <Sparkles size={48} style={{ opacity: 0.2 }} />
+                                    <p>Finding personalized recommendations...</p>
+                                </div>
+                            ) : filteredRecs.length > 0 ? (
+                                <div key={filterTab} className={styles.grid}>
+                                    {filteredRecs.map((rec, index) => {
                             const item: MediaItem = {
                                 id: rec.tmdb_id || 0,
                                 title: rec.items[0],
@@ -328,18 +394,24 @@ export default function RecommendationsPage() {
                                         onAddSuccess={fetchWatchlist}
                                         showServiceBadge={rec.service_name}
                                         onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
-                                        onStatusChange={() => fetchWatchlist()}
+                                        onStatusChange={() => {
+                                            fetchWatchlist();
+                                            refreshRecommendations();
+                                        }}
                                     />
                                 </div>
                             );
                         })}
-                    </div>
-                ) : (
-                    <div className={styles.emptyState}>
-                        <Lightbulb size={48} style={{ opacity: 0.2 }} />
-                        <p>No recommendations found. Try adding more items to your watchlist!</p>
-                    </div>
-                )}
+                                </div>
+                            ) : (
+                                <div className={styles.emptyState}>
+                                    <Lightbulb size={48} style={{ opacity: 0.2 }} />
+                                    <p>No recommendations found. Try adding more items to your watchlist!</p>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </section>
 
             <ConfirmationModal

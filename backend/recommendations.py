@@ -18,23 +18,20 @@ PROVIDER_COSTS = {
     "Paramount Plus": 5.99
 }
 
-def get_cached_data(db: Session, user_id: int, category: str, ttl_hours: int = 24):
-    """Retrieve valid cached data if it exists and is fresh (< ttl_hours old)."""
+def get_cached_data(db: Session, user_id: int, category: str, ttl_hours: int = 48):
+    """Retrieve cached data if it exists. Returns immediately for instant page loads."""
     cache_entry = db.query(models.RecommendationCache).filter(
         models.RecommendationCache.user_id == user_id,
         models.RecommendationCache.category == category
     ).first()
 
-    if cache_entry and cache_entry.updated_at:
-        updated_at = cache_entry.updated_at.replace(tzinfo=None) if cache_entry.updated_at.tzinfo else cache_entry.updated_at
-        age = datetime.utcnow() - updated_at
-        if age < timedelta(hours=ttl_hours):
-            try:
-                return json.loads(cache_entry.data)
-            except:
-                return None
-        else:
-            print(f"[CACHE] Stale cache for user {user_id} category '{category}' (age: {age}). Will recalculate.")
+    if cache_entry and cache_entry.data:
+        try:
+            data = json.loads(cache_entry.data)
+            if data and isinstance(data, list) and len(data) > 0:
+                return data
+        except Exception:
+            return None
     return None
 
 def set_cached_data(db: Session, user_id: int, category: str, data: list):
@@ -280,11 +277,23 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
         "jiohotstar": "122|220"
     }
 
-    # Process Watchlist for "Watch Now"
-    for item in watchlist:
+    # Process Watchlist for "Watch Now" across all active items
+    from concurrent.futures import ThreadPoolExecutor
+
+    def fetch_watchlist_item_providers(item):
+        try:
+            provs = tmdb_client.get_watch_providers(item.media_type, item.tmdb_id, region=country)
+            return item, provs
+        except Exception:
+            return item, {}
+
+    watchlist_candidates = raw_watchlist
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        watchlist_provider_pairs = list(executor.map(fetch_watchlist_item_providers, watchlist_candidates))
+
+    for item, providers in watchlist_provider_pairs:
         if item.title in seen_items: continue
         
-        providers = tmdb_client.get_watch_providers(item.media_type, item.tmdb_id, region=country)
         if "flatrate" in providers:
             potential_services = []
             for provider in providers["flatrate"]:
@@ -386,7 +395,7 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
                 "cost": 0, "savings": 0, "score": 100 + len(items)
             })
 
-    # B. "Cancel Unused"
+    # B. "Cancel Unused Subscriptions Alert" (Only subscriptions with 0 active watchlist items)
     for sub in subscriptions:
         if sub.id not in useful_subscriptions:
             recommendations.append({
@@ -394,7 +403,7 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
                 "service_name": sub.service_name,
                 "logo_url": get_service_logo(sub.service_name, country),
                 "items": [],
-                "reason": "No watchlist items found",
+                "reason": "No active watchlist items found on this service",
                 "cost": 0, "savings": sub.cost, "score": 50 + sub.cost,
                 "billing_cycle": sub.billing_cycle
             })
@@ -430,19 +439,30 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
             f.write(f"Trending week candidates: {len(combined_candidates)}\n")
 
         def _match_and_append(candidates, seen_titles, count):
-            """Try to match each candidate against user subscriptions and append if matched."""
-            for item in candidates:
+            """Try to match each candidate against user subscriptions in parallel."""
+            if not candidates or count >= 15:
+                return count
+
+            from concurrent.futures import ThreadPoolExecutor
+
+            def fetch_candidate_provider(item):
+                tmdb_id = item.get("id")
+                m_type = item.get("media_type")
+                provs = tmdb_client.get_watch_providers(m_type, tmdb_id, region=country)
+                return item, provs
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                candidate_pairs = list(executor.map(fetch_candidate_provider, candidates[:30]))
+
+            for item, providers in candidate_pairs:
                 if count >= 15: break
                 tmdb_id = item.get("id")
                 title = item.get("title") or item.get("name")
                 if tmdb_id in exclude_ids: continue
                 if title in seen_titles: continue
 
-                providers = tmdb_client.get_watch_providers(item.get("media_type"), tmdb_id, region=country)
                 matched_sub = None
-
                 shuffled_subs = list(subscriptions)
-                import random
                 random.shuffle(shuffled_subs)
 
                 if "flatrate" in providers:
@@ -574,17 +594,24 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
         "netflix": "8",
         "hulu": "15", 
         "amazon prime video": "9",
+        "amazon prime": "9",
+        "prime video": "9",
         "disney plus": "337",
+        "disney+": "337",
         "max": "384|312",
+        "hbo max": "384|312",
         "peacock": "386",
-        "apple tv plus": "350",
-        "apple tv+": "350",
+        "apple tv plus": "350|2",
+        "apple tv+": "350|2",
+        "apple tv": "350|2",
         "paramount plus": "83|531",
+        "paramount+": "83|531",
         "crunchyroll": "283",
         "hotstar": "122",
         "disney+ hotstar": "122",
         "jiocinema": "220",
-        "jiohotstar": "122|220"
+        "jiohotstar": "122|220",
+        "mubi": "11"
     }
 
     # Helper to resolve provider info for candidate
@@ -598,7 +625,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
             p_id = str(p.get("provider_id", ""))
             
             for sub in subscriptions:
-                s_name_key = sub.service_name.lower()
+                s_name_key = sub.service_name.lower().strip()
                 mapped_ids = PROVIDER_IDS_MAP.get(s_name_key, "").split("|") if s_name_key in PROVIDER_IDS_MAP else []
                 if not mapped_ids:
                     for k, v in PROVIDER_IDS_MAP.items():
@@ -606,7 +633,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
                             mapped_ids = v.split("|")
                             break
                 
-                if p_id in mapped_ids or sub.service_name.lower() in p_name.lower() or p_name.lower() in sub.service_name.lower():
+                if p_id in mapped_ids or s_name_key in p_name.lower() or p_name.lower() in s_name_key:
                     return sub.service_name, True
                     
         # 2. Return general provider name
@@ -615,46 +642,105 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
             
         return "Popular Streaming", False
 
+    from concurrent.futures import ThreadPoolExecutor
+
+    # --- Strategy 0: Guaranteed Active Subscriptions Pass ---
+    # Guarantees high-quality recommendations for services the user actually pays for (e.g. Apple TV+, Netflix, Hotstar)
+    if subscriptions:
+        for sub in subscriptions:
+            s_name_key = sub.service_name.lower().strip()
+            p_ids = PROVIDER_IDS_MAP.get(s_name_key, "")
+            if not p_ids:
+                for k, v in PROVIDER_IDS_MAP.items():
+                    if k in s_name_key or s_name_key in k:
+                        p_ids = v
+                        break
+            
+            if p_ids:
+                for m_type in ["tv", "movie"]:
+                    if len(recommendations) >= 12: break
+                    try:
+                        disc = tmdb_client.discover_media(
+                            m_type,
+                            with_watch_providers=p_ids,
+                            watch_region=country,
+                            sort_by="popularity.desc",
+                            min_vote_count=50
+                        )
+                        results = disc.get("results", [])
+                        random.shuffle(results)
+                        for item in results[:5]:
+                            t_id = item.get("id")
+                            if t_id in recommended_ids or t_id in watchlist_tmdb_ids: continue
+                            
+                            recommendations.append({
+                                "type": "discovery",
+                                "service_name": sub.service_name,
+                                "is_on_sub": True,
+                                "logo_url": get_service_logo(sub.service_name, country),
+                                "items": [item.get("title") or item.get("name")],
+                                "reason": f"Top Pick on {sub.service_name}",
+                                "score": 95 + item.get("vote_average", 0),
+                                "tmdb_id": t_id,
+                                "media_type": m_type,
+                                "poster_path": item.get("poster_path"),
+                                "vote_average": item.get("vote_average"),
+                                "overview": item.get("overview"),
+                                "original_language": item.get("original_language"),
+                                "genre_ids": item.get("genre_ids", [])
+                            })
+                            recommended_ids.add(t_id)
+                    except Exception as e:
+                        print(f"[RECS] Error discovering active sub content for {sub.service_name}: {e}")
+
     # --- Strategy A: Similar Content to Watchlist ---
     seeds = []
     for w in watchlist:
         weight = (w.user_rating * 2) if w.user_rating else (5 if w.status == "watched" else 3)
         seeds.append((w, weight))
     seeds.sort(key=lambda x: x[1], reverse=True)
-    top_seeds = [s[0] for s in seeds[:12]]
+    top_seeds = [s[0] for s in seeds[:10]]
     random.shuffle(top_seeds)
 
-    for seed in top_seeds:
-        if len(recommendations) >= 16: break
+    def fetch_similar_for_seed(seed):
         try:
             sim_data = tmdb_client.get_similar(seed.media_type, seed.tmdb_id)
             candidates = [c for c in sim_data.get("results", []) if c.get("vote_average", 0) >= 5.5]
-            random.shuffle(candidates)
-            
-            for sim in candidates:
-                sim_id = sim.get("id")
-                if sim_id in recommended_ids or sim_id in watchlist_tmdb_ids: continue
-                
-                prov_name, is_on_sub = resolve_provider_info(sim_id, seed.media_type)
-                recommendations.append({
-                    "type": "similar",
-                    "service_name": prov_name,
-                    "logo_url": get_service_logo(prov_name, country),
-                    "items": [sim.get("title") or sim.get("name")],
-                    "reason": f"Because you liked {seed.title}" if seed.user_rating else f"Similar to {seed.title}",
-                    "score": (90 if is_on_sub else 75) + sim.get("vote_average", 0),
-                    "tmdb_id": sim_id,
-                    "media_type": seed.media_type,
-                    "poster_path": sim.get("poster_path"),
-                    "vote_average": sim.get("vote_average"),
-                    "overview": sim.get("overview"),
-                    "original_language": sim.get("original_language"),
-                    "genre_ids": sim.get("genre_ids", [])
-                })
-                recommended_ids.add(sim_id)
-                break
+            return seed, candidates
         except Exception as e:
-            print(f"[RECS] Error getting similar for {seed.title}: {e}")
+            print(f"[RECS] Error fetching similar for seed {seed.title}: {e}")
+            return seed, []
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        sim_futures = [executor.submit(fetch_similar_for_seed, seed) for seed in top_seeds]
+        seed_results = [f.result() for f in sim_futures]
+
+    for seed, candidates in seed_results:
+        if len(recommendations) >= 18: break
+        random.shuffle(candidates)
+        for sim in candidates:
+            sim_id = sim.get("id")
+            if sim_id in recommended_ids or sim_id in watchlist_tmdb_ids: continue
+            
+            prov_name, is_on_sub = resolve_provider_info(sim_id, seed.media_type)
+            recommendations.append({
+                "type": "similar",
+                "service_name": prov_name,
+                "is_on_sub": is_on_sub,
+                "logo_url": get_service_logo(prov_name, country),
+                "items": [sim.get("title") or sim.get("name")],
+                "reason": f"Because you liked {seed.title}" if seed.user_rating else f"Similar to {seed.title}",
+                "score": (90 if is_on_sub else 75) + sim.get("vote_average", 0),
+                "tmdb_id": sim_id,
+                "media_type": seed.media_type,
+                "poster_path": sim.get("poster_path"),
+                "vote_average": sim.get("vote_average"),
+                "overview": sim.get("overview"),
+                "original_language": sim.get("original_language"),
+                "genre_ids": sim.get("genre_ids", [])
+            })
+            recommended_ids.add(sim_id)
+            break
 
     # --- Strategy B: Interest / Genre Discovery ---
     if len(recommendations) < 20:
@@ -668,7 +754,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
                         genre_counter.update(g_ids)
                 except: pass
         
-        top_genres = [g[0] for g in genre_counter.most_common(3)] or [28, 35, 18, 16] # Action, Comedy, Drama, Animation
+        top_genres = [g[0] for g in genre_counter.most_common(3)] or [28, 35, 18, 16]
         
         for g_id in top_genres:
             if len(recommendations) >= 20: break
@@ -686,6 +772,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
                         recommendations.append({
                             "type": "discovery",
                             "service_name": prov_name,
+                            "is_on_sub": is_on_sub,
                             "logo_url": get_service_logo(prov_name, country),
                             "items": [item.get("title") or item.get("name")],
                             "reason": "Recommended for your taste",
@@ -719,6 +806,7 @@ def calculate_similar_content(db: Session, user_id: int, country: str):
                     recommendations.append({
                         "type": "trending",
                         "service_name": prov_name,
+                        "is_on_sub": is_on_sub,
                         "logo_url": get_service_logo(prov_name, country),
                         "items": [item.get("title") or item.get("name")],
                         "reason": "Top Trending in your region",
