@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Star, Calendar, Clock, Film, Tv, Plus, Minus } from 'lucide-react';
 import api from '@/lib/api';
 import StarRating from './StarRating';
@@ -64,6 +65,8 @@ export default function MediaDetailsModal({
     dbId, currentSeason = 0, currentEpisode = 0, onProgressChange, 
     notes = "", onNotesChange
 }: MediaDetailsModalProps) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
     const [details, setDetails] = useState<MediaDetails | null>(null);
     const [providers, setProviders] = useState<ProvidersData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -147,7 +150,9 @@ export default function MediaDetailsModal({
         onProgressChange(newSeason, newEpisode);
     };
 
-    return (
+    if (!visible || !mounted) return null;
+
+    return createPortal(
         <div className={styles.overlay} onClick={handleBackdropClick}>
             <div className={styles.modal}>
                 <button className={styles.closeButton} onClick={onClose}>
@@ -379,6 +384,7 @@ export default function MediaDetailsModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

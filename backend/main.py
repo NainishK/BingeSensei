@@ -1085,52 +1085,65 @@ def delete_watchlist_item(
     
     return db_item
 
+def bg_refresh_recs(user_id: int):
+    try:
+        from database import SessionLocal
+        import recommendations
+        bg_db = SessionLocal()
+        try:
+            recommendations.refresh_recommendations(bg_db, user_id, force=True)
+        finally:
+            bg_db.close()
+    except Exception as e:
+        print(f"[BG_REFRESH] Error refreshing recommendations for user {user_id}: {e}")
+
 @app.put("/watchlist/{item_id}/status", response_model=schemas.WatchlistItem)
 def update_watchlist_status(
     item_id: int, 
     status: str, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(dependencies.get_current_user)
 ):
     db_item = crud.update_watchlist_item_status(db, item_id=item_id, user_id=current_user.id, status=status)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    import recommendations
-    recommendations.clear_user_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     return db_item
 
 @app.put("/watchlist/{item_id}/rating", response_model=schemas.WatchlistItem)
 def update_watchlist_rating(
     item_id: int, 
     update: schemas.WatchlistRatingUpdate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(dependencies.get_current_user)
 ):
     db_item = crud.update_watchlist_item_rating(db, item_id=item_id, user_id=current_user.id, rating=update.rating)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    import recommendations
-    recommendations.clear_user_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     return db_item
 
 @app.put("/watchlist/{item_id}/notes", response_model=schemas.WatchlistItem)
 def update_watchlist_notes(
     item_id: int, 
     update: schemas.WatchlistNoteUpdate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(dependencies.get_current_user)
 ):
     db_item = crud.update_watchlist_item_notes(db, item_id=item_id, user_id=current_user.id, notes=update.notes)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    import recommendations
-    recommendations.clear_user_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     return db_item
 
 @app.put("/watchlist/{item_id}/progress", response_model=schemas.WatchlistItem)
 def update_watchlist_progress(
     item_id: int, 
     update: schemas.WatchlistProgressUpdate, 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(dependencies.get_current_user)
 ):
@@ -1143,8 +1156,7 @@ def update_watchlist_progress(
     )
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    import recommendations
-    recommendations.clear_user_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     return db_item
 
 @app.get("/recommendations")

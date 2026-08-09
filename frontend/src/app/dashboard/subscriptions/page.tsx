@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 import styles from './subscriptions.module.css';
 import { Subscription, Service, Plan } from '@/lib/types';
-import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info } from 'lucide-react';
+import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info, ChevronDown } from 'lucide-react';
 import { useRecommendations } from '@/context/RecommendationsContext';
 import { formatCurrency, getCurrencySymbol } from '@/lib/currency';
 import DatePicker from "react-datepicker";
@@ -12,6 +12,77 @@ import "react-datepicker/dist/react-datepicker.css";
 import { ServiceIcon } from '@/components/ServiceIcon';
 import CustomSelect from '@/components/CustomSelect';
 import { SubscriptionsSkeleton } from '@/components/SkeletonLoader';
+
+interface SubFilterOption<T> {
+    value: T;
+    label: string;
+    dotClass?: string;
+    triggerClass?: string;
+}
+
+function CustomSubFilterDropdown<T extends string>({
+    label,
+    value,
+    onChange,
+    options
+}: {
+    label: string;
+    value: T;
+    onChange: (val: T) => void;
+    options: SubFilterOption<T>[];
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const activeOption = options.find(o => o.value === value) || options[0];
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className={styles.customDropdownContainer} ref={dropdownRef}>
+            <button
+                type="button"
+                className={`${styles.customDropdownTrigger} ${activeOption.triggerClass || ''}`}
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <div className={styles.triggerContent}>
+                    {activeOption.dotClass && <span className={`${styles.statusDot} ${activeOption.dotClass}`} />}
+                    <span className={styles.triggerLabel}>{label}:</span>
+                    <span className={styles.triggerText}>{activeOption.label}</span>
+                </div>
+                <ChevronDown size={14} className={`${styles.dropdownChevron} ${isOpen ? styles.chevronOpen : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div className={styles.customDropdownMenu}>
+                    {options.map((opt) => (
+                        <div
+                            key={opt.value}
+                            className={`${styles.customDropdownItem} ${opt.value === value ? styles.selectedItem : ''}`}
+                            onClick={() => {
+                                onChange(opt.value);
+                                setIsOpen(false);
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {opt.dotClass && <span className={`${styles.statusDot} ${opt.dotClass}`} />}
+                                <span>{opt.label}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 
 
@@ -378,7 +449,33 @@ export default function SubscriptionsPage() {
                         ) : (
                             <>
                                 {/* Unified Status & Category Filters */}
-                                <div className={styles.filtersWrapper}>
+                                {/* Mobile Filter Dropdowns */}
+                                <div className={styles.mobileFilterDropdowns}>
+                                    <CustomSubFilterDropdown
+                                        label="Status"
+                                        value={filterStatus}
+                                        onChange={(val) => setFilterStatus(val)}
+                                        options={[
+                                            { value: 'ALL', label: 'All', dotClass: styles.dotBlue },
+                                            { value: 'OVERDUE', label: 'Renewal Due', dotClass: styles.dotRed, triggerClass: styles.triggerOverdue },
+                                            { value: 'DUE_SOON', label: 'Due Soon', dotClass: styles.dotYellow, triggerClass: styles.triggerDueSoon },
+                                            { value: 'ACTIVE', label: 'Active', dotClass: styles.dotGreen, triggerClass: styles.triggerActive },
+                                        ]}
+                                    />
+                                    <CustomSubFilterDropdown
+                                        label="Category"
+                                        value={filterCategory}
+                                        onChange={(val) => setFilterCategory(val)}
+                                        options={[
+                                            { value: 'ALL', label: 'All' },
+                                            { value: 'OTT', label: 'Streaming' },
+                                            { value: 'OTHER', label: 'Others' },
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Desktop Filter Rows */}
+                                <div className={`${styles.filtersWrapper} ${styles.filtersWrapperDesktop}`}>
                                     <div className={styles.filterRow}>
                                         <span className={styles.filterLabel}>Status:</span>
                                         <div className={styles.filterContainer}>
