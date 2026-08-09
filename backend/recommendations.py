@@ -478,31 +478,30 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
                             matched_sub = sub.service_name
                             break
 
-                if not matched_sub and not provider_string:
-                    matched_sub = "Available Globally"
+                if not matched_sub:
+                    matched_sub = "Popular Streaming"
                     if "flatrate" in providers and len(providers["flatrate"]) > 0:
                         matched_sub = f"Available on {providers['flatrate'][0]['provider_name']}"
 
-                if matched_sub:
-                    is_global = not provider_string and ("Available Globally" in matched_sub or "Available on" in matched_sub)
-                    recommendations.append({
-                        "type": "global_trending" if is_global else "trending",
-                        "service_name": matched_sub,
-                        "logo_url": get_service_logo(matched_sub.replace("Available on ", "") if "Available on " in matched_sub else matched_sub, country),
-                        "items": [title],
-                        "reason": "Trending This Week" if not is_global else "Trending Worldwide",
-                        "cost": 0, "savings": 0,
-                        "score": 95 + (item.get("popularity", 0) / 100),
-                        "tmdb_id": tmdb_id,
-                        "media_type": item.get("media_type"),
-                        "poster_path": item.get("poster_path"),
-                        "vote_average": item.get("vote_average"),
-                        "overview": item.get("overview"),
-                        "original_language": item.get("original_language"),
-                        "genre_ids": item.get("genre_ids", [])
-                    })
-                    seen_titles.add(title)
-                    count += 1
+                is_global = ("Available" in matched_sub or "Popular" in matched_sub)
+                recommendations.append({
+                    "type": "global_trending" if is_global else "trending",
+                    "service_name": matched_sub,
+                    "logo_url": get_service_logo(matched_sub.replace("Available on ", "") if "Available on " in matched_sub else matched_sub, country),
+                    "items": [title],
+                    "reason": "Trending This Week" if not is_global else "Trending Worldwide",
+                    "cost": 0, "savings": 0,
+                    "score": 95 + (item.get("popularity", 0) / 100),
+                    "tmdb_id": tmdb_id,
+                    "media_type": item.get("media_type"),
+                    "poster_path": item.get("poster_path"),
+                    "vote_average": item.get("vote_average"),
+                    "overview": item.get("overview"),
+                    "original_language": item.get("original_language"),
+                    "genre_ids": item.get("genre_ids", [])
+                })
+                seen_titles.add(title)
+                count += 1
             return count
 
         count = 0

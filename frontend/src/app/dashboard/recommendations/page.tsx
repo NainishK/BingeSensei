@@ -1,20 +1,88 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import api from '@/lib/api';
 import styles from './recommendations.module.css';
 import { Recommendation } from '@/lib/types';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Tv, Globe, Layers } from 'lucide-react';
+import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Tv, Globe, Layers } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import AIInsightsModal from '@/components/AIInsightsModal';
 import { formatCurrency } from '@/lib/currency';
 
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { RecommendationsSkeleton } from '@/components/SkeletonLoader';
+interface FilterOption {
+    value: 'all' | 'subscriptions' | 'explore';
+    label: string;
+    count: number;
+    icon: React.ReactNode;
+}
 
-// ... (imports)
+function CustomFilterDropdown({
+    value,
+    onChange,
+    options
+}: {
+    value: 'all' | 'subscriptions' | 'explore';
+    onChange: (val: 'all' | 'subscriptions' | 'explore') => void;
+    options: FilterOption[];
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const activeOption = options.find(o => o.value === value) || options[0];
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className={styles.mobileFilterDropdown}>
+            <div className={styles.customDropdownContainer} ref={dropdownRef}>
+                <button
+                    type="button"
+                    className={styles.customDropdownTrigger}
+                    onClick={() => setIsOpen(!isOpen)}
+                >
+                    <div className={styles.triggerContent}>
+                        {activeOption.icon}
+                        <span>{activeOption.label} ({activeOption.count})</span>
+                    </div>
+                    <ChevronDown size={16} className={`${styles.dropdownChevron} ${isOpen ? styles.chevronOpen : ''}`} />
+                </button>
+
+                {isOpen && (
+                    <div className={styles.customDropdownMenu}>
+                        {options.map((opt) => (
+                            <div
+                                key={opt.value}
+                                className={`${styles.customDropdownItem} ${opt.value === value ? styles.selectedItem : ''}`}
+                                onClick={() => {
+                                    onChange(opt.value);
+                                    setIsOpen(false);
+                                }}
+                            >
+                                <div className={styles.itemLeft}>
+                                    {opt.icon}
+                                    <span>{opt.label}</span>
+                                </div>
+                                <span className={styles.itemCount}>({opt.count})</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function RecommendationsPage() {
     // ... existing hooks
@@ -45,6 +113,7 @@ export default function RecommendationsPage() {
     const [userCountry, setUserCountry] = useState('US');
     const [userSubscriptions, setUserSubscriptions] = useState<string[]>([]);
     const [filterTab, setFilterTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
+    const [trendingTab, setTrendingTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
 
     // Deletion State
     const [itemToRemove, setItemToRemove] = useState<{ id: number; title: string } | null>(null);
@@ -144,6 +213,33 @@ export default function RecommendationsPage() {
     const trendingRecs = dashboardRecs.filter(r => r.type === 'trending' || r.type === 'global_trending');
     const cancelRecs = dashboardRecs.filter(r => r.type === 'cancel' && r.service_name !== 'YouTube Premium');
 
+    const isTrendingOnSub = (rec: Recommendation) => {
+        if (rec.type === 'trending') return true;
+        if (rec.type === 'global_trending') return false;
+        if (typeof rec.is_on_sub === 'boolean') return rec.is_on_sub;
+        if (!rec.service_name) return false;
+        const name = rec.service_name.toLowerCase().trim();
+        if (name === 'popular streaming' || name.startsWith('available on')) return false;
+        if (userSubscriptions.length > 0) {
+            return userSubscriptions.some(sub => {
+                const cleanSub = sub.replace(/\s*(plus|\+)\s*/g, '').toLowerCase().trim();
+                const cleanRec = name.replace(/\s*(plus|\+)\s*/g, '').toLowerCase().trim();
+                return cleanRec.includes(cleanSub) || cleanSub.includes(cleanRec);
+            });
+        }
+        return true;
+    };
+
+    const trendingSubCount = trendingRecs.filter(isTrendingOnSub).length;
+    const trendingExploreCount = trendingRecs.filter(r => !isTrendingOnSub(r)).length;
+
+    const filteredTrendingRecs = trendingRecs.filter(rec => {
+        const isOnSub = isTrendingOnSub(rec);
+        if (trendingTab === 'subscriptions') return isOnSub;
+        if (trendingTab === 'explore') return !isOnSub;
+        return true;
+    });
+
     if (loadingDashboard && dashboardRecs.length === 0) return <RecommendationsSkeleton />;
 
     return (
@@ -159,12 +255,12 @@ export default function RecommendationsPage() {
                 onWatchlistUpdate={fetchWatchlist}
             />
 
-            {/* Trending Section - Carousel */}
+            {/* Trending Section - Carousel & Filter Pills */}
             {trendingRecs.length > 0 && (
                 <section className={styles.section}>
                     <div className={styles.sectionHeader}>
                         <h2 className={styles.sectionTitle} style={{ color: '#ec4899' }}>
-                            <PlayCircle className={styles.sectionIcon} /> Trending on Your Services
+                            <PlayCircle className={styles.sectionIcon} /> Trending Content
                         </h2>
                         {/* Carousel Controls */}
                         <div className={styles.carouselControls}>
@@ -177,15 +273,52 @@ export default function RecommendationsPage() {
                             </button>
                             <button
                                 onClick={handleNextTrending}
-                                disabled={trendingIndex + trendingVisible >= trendingRecs.length}
+                                disabled={trendingIndex + trendingVisible >= filteredTrendingRecs.length}
                                 className={styles.carouselBtn}
                             >
                                 <ChevronRight size={20} />
                             </button>
                         </div>
                     </div>
-                    <div className={styles.grid}>
-                        {trendingRecs.slice(trendingIndex, trendingIndex + trendingVisible).map((rec, index) => {
+
+                    {/* Mobile Filter Dropdown */}
+                    <CustomFilterDropdown
+                        value={trendingTab}
+                        onChange={(val) => {
+                            setTrendingTab(val);
+                            setTrendingIndex(0);
+                        }}
+                        options={[
+                            { value: 'all', label: 'All Trending', count: trendingRecs.length, icon: <Layers size={14} /> },
+                            { value: 'subscriptions', label: 'On My Subscriptions', count: trendingSubCount, icon: <Tv size={14} /> },
+                            { value: 'explore', label: 'Worldwide & Explore', count: trendingExploreCount, icon: <Globe size={14} /> },
+                        ]}
+                    />
+
+                    {/* Desktop Filter Pills */}
+                    <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`} style={{ marginBottom: '1.25rem' }}>
+                        <button
+                            className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
+                            onClick={() => { setTrendingTab('all'); setTrendingIndex(0); }}
+                        >
+                            <Layers size={14} /> All Trending ({trendingRecs.length})
+                        </button>
+                        <button
+                            className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                            onClick={() => { setTrendingTab('subscriptions'); setTrendingIndex(0); }}
+                        >
+                            <Tv size={14} /> On My Subscriptions ({trendingSubCount})
+                        </button>
+                        <button
+                            className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
+                            onClick={() => { setTrendingTab('explore'); setTrendingIndex(0); }}
+                        >
+                            <Globe size={14} /> Worldwide & Explore ({trendingExploreCount})
+                        </button>
+                    </div>
+
+                    <div key={trendingTab} className={styles.grid}>
+                        {filteredTrendingRecs.slice(trendingIndex, trendingIndex + trendingVisible).map((rec, index) => {
                             const tmdbId = rec.tmdb_id || 0;
                             const existingItem = watchlist.find(w => w.tmdb_id === tmdbId || (w.tmdb_id === 0 && rec.items[0] === 'Title needed')); // Strict ID match preference
 
@@ -329,26 +462,40 @@ export default function RecommendationsPage() {
                     return (
                         <>
                             {similarRecs.length > 0 && (
-                                <div className={styles.filterPills}>
-                                    <button
-                                        className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
-                                        onClick={() => setFilterTab('all')}
-                                    >
-                                        <Layers size={14} /> All Picks ({similarRecs.length})
-                                    </button>
-                                    <button
-                                        className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
-                                        onClick={() => setFilterTab('subscriptions')}
-                                    >
-                                        <Tv size={14} /> On My Subscriptions ({subCount})
-                                    </button>
-                                    <button
-                                        className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
-                                        onClick={() => setFilterTab('explore')}
-                                    >
-                                        <Globe size={14} /> Worldwide & Explore ({exploreCount})
-                                    </button>
-                                </div>
+                                <>
+                                    {/* Mobile Filter Dropdown */}
+                                    <CustomFilterDropdown
+                                        value={filterTab}
+                                        onChange={(val) => setFilterTab(val)}
+                                        options={[
+                                            { value: 'all', label: 'All Picks', count: similarRecs.length, icon: <Layers size={14} /> },
+                                            { value: 'subscriptions', label: 'On My Subscriptions', count: subCount, icon: <Tv size={14} /> },
+                                            { value: 'explore', label: 'Worldwide & Explore', count: exploreCount, icon: <Globe size={14} /> },
+                                        ]}
+                                    />
+
+                                    {/* Desktop Filter Pills */}
+                                    <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`}>
+                                        <button
+                                            className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
+                                            onClick={() => setFilterTab('all')}
+                                        >
+                                            <Layers size={14} /> All Picks ({similarRecs.length})
+                                        </button>
+                                        <button
+                                            className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                                            onClick={() => setFilterTab('subscriptions')}
+                                        >
+                                            <Tv size={14} /> On My Subscriptions ({subCount})
+                                        </button>
+                                        <button
+                                            className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
+                                            onClick={() => setFilterTab('explore')}
+                                        >
+                                            <Globe size={14} /> Worldwide & Explore ({exploreCount})
+                                        </button>
+                                    </div>
+                                </>
                             )}
 
                             {loadingSimilar && similarRecs.length === 0 ? (
