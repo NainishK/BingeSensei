@@ -1165,10 +1165,10 @@ def get_similar_recommendations(force_refresh: bool = False, db: Session = Depen
     return recommendations.get_similar_content(db, user_id=current_user.id, force_refresh=force_refresh)
 
 @app.post("/recommendations/refresh")
-def refresh_recommendations_endpoint(type: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    """Force refresh recommendations synchronously"""
+def refresh_recommendations_endpoint(type: str = None, force_trending: bool = False, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    """Force refresh recommendations. Preserves 24h Trending cache unless force_trending=True."""
     import recommendations
-    recommendations.refresh_recommendations(db, user_id=current_user.id, force=True, category=type)
+    recommendations.refresh_recommendations(db, user_id=current_user.id, force=True, force_trending=force_trending, category=type)
     return {"message": "Recommendations refreshed"}
 
 

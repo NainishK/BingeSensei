@@ -55,14 +55,35 @@ def set_cached_data(db: Session, user_id: int, category: str, data: list):
     cache_entry.updated_at = datetime.utcnow() # Ensure timestamp update
     db.commit()
 
-def clear_user_cache(db: Session, user_id: int):
-    """Invalidate all recommendation cache for a user."""
-    db.query(models.RecommendationCache).filter(
+def get_cached_data_with_ttl(db: Session, user_id: int, category: str, ttl_hours: int = 24):
+    """Retrieve cached data if it exists and is not older than ttl_hours."""
+    cache_entry = db.query(models.RecommendationCache).filter(
+        models.RecommendationCache.user_id == user_id,
+        models.RecommendationCache.category == category
+    ).first()
+
+    if cache_entry and cache_entry.data and cache_entry.updated_at:
+        updated_at = cache_entry.updated_at.replace(tzinfo=None) if cache_entry.updated_at.tzinfo else cache_entry.updated_at
+        if datetime.utcnow() - updated_at <= timedelta(hours=ttl_hours):
+            try:
+                data = json.loads(cache_entry.data)
+                if data and isinstance(data, list) and len(data) > 0:
+                    return data
+            except Exception:
+                return None
+    return None
+
+def clear_user_cache(db: Session, user_id: int, include_trending: bool = False):
+    """Invalidate recommendation cache for a user. Preserves 24-hour trending cache by default."""
+    query = db.query(models.RecommendationCache).filter(
         models.RecommendationCache.user_id == user_id
-    ).delete()
+    )
+    if not include_trending:
+        query = query.filter(models.RecommendationCache.category.notlike("trending_%"))
+    query.delete(synchronize_session=False)
     db.commit()
 
-def refresh_recommendations(db: Session, user_id: int, force: bool = False, category: str = None):
+def refresh_recommendations(db: Session, user_id: int, force: bool = False, force_trending: bool = False, category: str = None):
     """
     Background task to re-calculate and cache all recommendations.
     If force is False, only refreshes if cache is missing or older than 24 hours.
@@ -75,7 +96,7 @@ def refresh_recommendations(db: Session, user_id: int, force: bool = False, cate
         return
 
     country = user.country or "US"
-    print(f"--- [REFRESH] Checking recommendations for user {user_id} ({country}) (force={force}, cat={category}) ---")
+    print(f"--- [REFRESH] Checking recommendations for user {user_id} ({country}) (force={force}, force_trending={force_trending}, cat={category}) ---")
     
     try:
         # 1. Refresh Dashboard (Trending/Watch Now)
@@ -96,7 +117,7 @@ def refresh_recommendations(db: Session, user_id: int, force: bool = False, cate
             
             if should_refresh:
                 print(f"[REFRESH] Recalculating Dashboard ({country}) for user {user_id}...")
-                dashboard_recs = calculate_dashboard_recommendations(db, user_id, country)
+                dashboard_recs = calculate_dashboard_recommendations(db, user_id, country, force_trending=force_trending)
                 set_cached_data(db, user_id, cache_key, dashboard_recs)
 
         # 2. Refresh Similar Content
@@ -161,7 +182,7 @@ def get_dashboard_recommendations(db: Session, user_id: int):
         
     return recs
 
-def calculate_dashboard_recommendations(db: Session, user_id: int, country: str):
+def calculate_dashboard_recommendations(db: Session, user_id: int, country: str, force_trending: bool = False):
     # 0. Get User Context (country is now passed in)
 
     # 1. Get User's Watchlist
@@ -422,119 +443,129 @@ def calculate_dashboard_recommendations(db: Session, user_id: int, country: str)
     with open("debug_recs.log", "a") as f:
         f.write(f"Provider String: {provider_string}\n")
 
-    try:
-        # Layer 1: This week's actual trending content (TMDB /trending/week)
-        data_movies = tmdb_client.get_trending("movie", "week")
-        data_tv = tmdb_client.get_trending("tv", "week")
-        trending_movies = [{**x, "media_type": "movie"} for x in data_movies.get("results", [])[:20]]
-        trending_tv    = [{**x, "media_type": "tv"}    for x in data_tv.get("results",    [])[:20]]
+    # 3. Trending Content (24-hour Daily TTL Cache)
+    trending_cache_key = f"trending_{country}"
+    cached_trending = None if force_trending else get_cached_data_with_ttl(db, user_id, trending_cache_key, ttl_hours=24)
 
-        # Interleave movies and TV for variety
-        combined_candidates = []
-        for i in range(max(len(trending_movies), len(trending_tv))):
-            if i < len(trending_movies): combined_candidates.append(trending_movies[i])
-            if i < len(trending_tv):    combined_candidates.append(trending_tv[i])
+    if cached_trending:
+        print(f"[TRENDING] Re-using 24h cached Trending content for user {user_id} ({country})")
+        recommendations.extend(cached_trending)
+    else:
+        print(f"[TRENDING] Cache expired or forced — fetching fresh Trending content from TMDB for user {user_id} ({country})...")
+        trending_list = []
+        try:
+            # Layer 1: This week's actual trending content (TMDB /trending/week)
+            data_movies = tmdb_client.get_trending("movie", "week")
+            data_tv = tmdb_client.get_trending("tv", "week")
+            trending_movies = [{**x, "media_type": "movie"} for x in data_movies.get("results", [])[:20]]
+            trending_tv    = [{**x, "media_type": "tv"}    for x in data_tv.get("results",    [])[:20]]
 
-        with open("debug_recs.log", "a") as f:
-            f.write(f"Trending week candidates: {len(combined_candidates)}\n")
+            # Interleave movies and TV for variety
+            combined_candidates = []
+            for i in range(max(len(trending_movies), len(trending_tv))):
+                if i < len(trending_movies): combined_candidates.append(trending_movies[i])
+                if i < len(trending_tv):    combined_candidates.append(trending_tv[i])
 
-        def _match_and_append(candidates, seen_titles, count):
-            """Try to match each candidate against user subscriptions in parallel."""
-            if not candidates or count >= 15:
+            def _match_and_append(candidates, seen_titles, count):
+                """Try to match each candidate against user subscriptions in parallel."""
+                if not candidates or count >= 15:
+                    return count
+
+                from concurrent.futures import ThreadPoolExecutor
+
+                def fetch_candidate_provider(item):
+                    tmdb_id = item.get("id")
+                    m_type = item.get("media_type")
+                    provs = tmdb_client.get_watch_providers(m_type, tmdb_id, region=country)
+                    return item, provs
+
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    candidate_pairs = list(executor.map(fetch_candidate_provider, candidates[:30]))
+
+                for item, providers in candidate_pairs:
+                    if count >= 15: break
+                    tmdb_id = item.get("id")
+                    title = item.get("title") or item.get("name")
+                    if tmdb_id in exclude_ids: continue
+                    if title in seen_titles: continue
+
+                    matched_sub = None
+                    shuffled_subs = list(subscriptions)
+                    random.shuffle(shuffled_subs)
+
+                    if "flatrate" in providers:
+                        flatrate_ids = [str(p["provider_id"]) for p in providers["flatrate"]]
+                        for sub in shuffled_subs:
+                            s_name = sub.service_name.lower().replace(" ", "")
+                            matched_ids_list = []
+                            for k, v in PROVIDER_IDS_MAP.items():
+                                if k.replace(" ", "") in s_name:
+                                    matched_ids_list = v.split("|")
+                                    break
+                            if any(pid in flatrate_ids for pid in matched_ids_list):
+                                matched_sub = sub.service_name
+                                break
+
+                    if not matched_sub:
+                        matched_sub = "Popular Streaming"
+                        if "flatrate" in providers and len(providers["flatrate"]) > 0:
+                            matched_sub = f"Available on {providers['flatrate'][0]['provider_name']}"
+
+                    is_global = ("Available" in matched_sub or "Popular" in matched_sub)
+                    trending_list.append({
+                        "type": "global_trending" if is_global else "trending",
+                        "service_name": matched_sub,
+                        "logo_url": get_service_logo(matched_sub.replace("Available on ", "") if "Available on " in matched_sub else matched_sub, country),
+                        "items": [title],
+                        "reason": "Trending This Week" if not is_global else "Trending Worldwide",
+                        "cost": 0, "savings": 0,
+                        "score": 95 + (item.get("popularity", 0) / 100),
+                        "tmdb_id": tmdb_id,
+                        "media_type": item.get("media_type"),
+                        "poster_path": item.get("poster_path"),
+                        "vote_average": item.get("vote_average"),
+                        "overview": item.get("overview"),
+                        "original_language": item.get("original_language"),
+                        "genre_ids": item.get("genre_ids", [])
+                    })
+                    seen_titles.add(title)
+                    count += 1
                 return count
 
-            from concurrent.futures import ThreadPoolExecutor
+            count = 0
+            seen_trending_titles = set()
+            print(f"[TRENDING] Pass 1: matching from /trending/week pool ({len(combined_candidates)} candidates)")
+            count = _match_and_append(combined_candidates, seen_trending_titles, count)
+            print(f"[TRENDING] Pass 1 result: {count} items matched from trending/week")
 
-            def fetch_candidate_provider(item):
-                tmdb_id = item.get("id")
-                m_type = item.get("media_type")
-                provs = tmdb_client.get_watch_providers(m_type, tmdb_id, region=country)
-                return item, provs
+            # Layer 2: Fallback
+            if count < 8 and provider_string:
+                print(f"[TRENDING] Pass 2: only {count} from trending/week — supplementing with provider-filtered discover")
+                fallback_movies = tmdb_client.discover_media(
+                    "movie", sort_by="popularity.desc", min_vote_count=300,
+                    with_watch_providers=provider_string, watch_region=country
+                )
+                fallback_tv = tmdb_client.discover_media(
+                    "tv", sort_by="popularity.desc", min_vote_count=300,
+                    with_watch_providers=provider_string, watch_region=country
+                )
+                fb_movies = [{**x, "media_type": "movie"} for x in fallback_movies.get("results", [])[:15]]
+                fb_tv     = [{**x, "media_type": "tv"}    for x in fallback_tv.get("results",    [])[:15]]
+                fallback_combined = []
+                for i in range(max(len(fb_movies), len(fb_tv))):
+                    if i < len(fb_movies): fallback_combined.append(fb_movies[i])
+                    if i < len(fb_tv):    fallback_combined.append(fb_tv[i])
+                count = _match_and_append(fallback_combined, seen_trending_titles, count)
+                print(f"[TRENDING] Pass 2 result: {count} total items after fallback")
 
-            with ThreadPoolExecutor(max_workers=8) as executor:
-                candidate_pairs = list(executor.map(fetch_candidate_provider, candidates[:30]))
+            if trending_list:
+                set_cached_data(db, user_id, trending_cache_key, trending_list)
+                recommendations.extend(trending_list)
 
-            for item, providers in candidate_pairs:
-                if count >= 15: break
-                tmdb_id = item.get("id")
-                title = item.get("title") or item.get("name")
-                if tmdb_id in exclude_ids: continue
-                if title in seen_titles: continue
-
-                matched_sub = None
-                shuffled_subs = list(subscriptions)
-                random.shuffle(shuffled_subs)
-
-                if "flatrate" in providers:
-                    flatrate_ids = [str(p["provider_id"]) for p in providers["flatrate"]]
-                    for sub in shuffled_subs:
-                        s_name = sub.service_name.lower().replace(" ", "")
-                        matched_ids_list = []
-                        for k, v in PROVIDER_IDS_MAP.items():
-                            if k.replace(" ", "") in s_name:
-                                matched_ids_list = v.split("|")
-                                break
-                        if any(pid in flatrate_ids for pid in matched_ids_list):
-                            matched_sub = sub.service_name
-                            break
-
-                if not matched_sub:
-                    matched_sub = "Popular Streaming"
-                    if "flatrate" in providers and len(providers["flatrate"]) > 0:
-                        matched_sub = f"Available on {providers['flatrate'][0]['provider_name']}"
-
-                is_global = ("Available" in matched_sub or "Popular" in matched_sub)
-                recommendations.append({
-                    "type": "global_trending" if is_global else "trending",
-                    "service_name": matched_sub,
-                    "logo_url": get_service_logo(matched_sub.replace("Available on ", "") if "Available on " in matched_sub else matched_sub, country),
-                    "items": [title],
-                    "reason": "Trending This Week" if not is_global else "Trending Worldwide",
-                    "cost": 0, "savings": 0,
-                    "score": 95 + (item.get("popularity", 0) / 100),
-                    "tmdb_id": tmdb_id,
-                    "media_type": item.get("media_type"),
-                    "poster_path": item.get("poster_path"),
-                    "vote_average": item.get("vote_average"),
-                    "overview": item.get("overview"),
-                    "original_language": item.get("original_language"),
-                    "genre_ids": item.get("genre_ids", [])
-                })
-                seen_titles.add(title)
-                count += 1
-            return count
-
-        count = 0
-        seen_trending_titles = set()
-        print(f"[TRENDING] Pass 1: matching from /trending/week pool ({len(combined_candidates)} candidates)")
-        count = _match_and_append(combined_candidates, seen_trending_titles, count)
-        print(f"[TRENDING] Pass 1 result: {count} items matched from trending/week")
-
-        # Layer 2: Fallback — if trending/week didn't yield enough for the user's region,
-        # supplement with provider-filtered discover (popular content on their services)
-        if count < 8 and provider_string:
-            print(f"[TRENDING] Pass 2: only {count} from trending/week — supplementing with provider-filtered discover")
-            fallback_movies = tmdb_client.discover_media(
-                "movie", sort_by="popularity.desc", min_vote_count=300,
-                with_watch_providers=provider_string, watch_region=country
-            )
-            fallback_tv = tmdb_client.discover_media(
-                "tv", sort_by="popularity.desc", min_vote_count=300,
-                with_watch_providers=provider_string, watch_region=country
-            )
-            fb_movies = [{**x, "media_type": "movie"} for x in fallback_movies.get("results", [])[:15]]
-            fb_tv     = [{**x, "media_type": "tv"}    for x in fallback_tv.get("results",    [])[:15]]
-            fallback_combined = []
-            for i in range(max(len(fb_movies), len(fb_tv))):
-                if i < len(fb_movies): fallback_combined.append(fb_movies[i])
-                if i < len(fb_tv):    fallback_combined.append(fb_tv[i])
-            count = _match_and_append(fallback_combined, seen_trending_titles, count)
-            print(f"[TRENDING] Pass 2 result: {count} total items after fallback")
-
-    except Exception as e:
-        print(f"Error fetching trending: {e}")
-        import traceback
-        traceback.print_exc()
+        except Exception as e:
+            print(f"Error fetching trending: {e}")
+            import traceback
+            traceback.print_exc()
             
     recommendations.sort(key=lambda x: x["score"], reverse=True)
     return recommendations
