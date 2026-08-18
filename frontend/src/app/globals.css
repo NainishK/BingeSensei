@@ -253,3 +253,18 @@ input:-webkit-autofill:active {
   color: var(--foreground) !important;
   border: 1px solid var(--border) !important;
 }
+
+/* Global Spin Animation Utility */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite !important;
+  display: inline-block;
+}

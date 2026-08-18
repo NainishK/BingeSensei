@@ -48,6 +48,7 @@ export interface Service {
     name: string;
     logo_url?: string;
     category: string;
+    country?: string;
 }
 
 export interface Plan {
@@ -56,6 +57,7 @@ export interface Plan {
     cost: number;
     currency: string;
     billing_cycle: string;
+    country?: string;
 }
 
 export interface AIRecommendation {

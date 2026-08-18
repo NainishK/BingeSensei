@@ -1720,12 +1720,14 @@ def get_subscription_coverage(
 
 
 @app.get("/services/", response_model=list[schemas.Service])
-def read_services(db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    return crud.get_services(db, country=current_user.country)
+def read_services(country: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    target_country = country if country else (current_user.country or "US")
+    return crud.get_services(db, country=target_country)
 
 @app.get("/services/{service_id}/plans", response_model=list[schemas.Plan])
-def read_plans(service_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    return crud.get_plans(db, service_id=service_id, country=current_user.country)
+def read_plans(service_id: int, country: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    target_country = country if country else (current_user.country or "US")
+    return crud.get_plans(db, service_id=service_id, country=target_country)
 
 @app.put("/users/me", response_model=schemas.User)
 def update_user_me(country: str, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
