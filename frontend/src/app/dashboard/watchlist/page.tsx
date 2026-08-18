@@ -63,13 +63,36 @@ export default function WatchlistPage() {
         fetchSubscriptions();
     }, []);
 
+    const [userCountry, setUserCountry] = useState<string>('US');
+    const [regionalServices, setRegionalServices] = useState<string[]>([]);
+
     const fetchSubscriptions = async () => {
         try {
-            const response = await api.get('/subscriptions/');
-            const serviceNames = new Set<string>(response.data.map((sub: any) => sub.service_name));
+            const profileRes = await api.get('/users/me/');
+            const country = profileRes.data.country || 'US';
+            setUserCountry(country);
+
+            const [subsRes, servicesRes] = await Promise.all([
+                api.get('/subscriptions/', { params: { country } }),
+                api.get(`/services/?country=${country}`)
+            ]);
+
+            const ottSubs = (subsRes.data || []).filter((sub: any) => !sub.category || sub.category === 'OTT');
+            const serviceNames = new Set<string>(ottSubs.map((sub: any) => sub.service_name));
             setUserServices(serviceNames);
+
+            const countryServices = (servicesRes.data || [])
+                .filter((s: any) => !s.category || s.category === 'OTT')
+                .map((s: any) => s.name);
+
+            const allAvailableServices = Array.from(new Set([
+                ...countryServices,
+                ...ottSubs.map((sub: any) => sub.service_name)
+            ])).sort();
+
+            setRegionalServices(allAvailableServices as string[]);
         } catch (error) {
-            console.error('Failed to fetch subscriptions', error);
+            console.error('Failed to fetch regional services', error);
         }
     };
 
@@ -245,12 +268,35 @@ export default function WatchlistPage() {
         // 4. Provider Filter
         if (providerFilter !== 'all') {
             if (providerFilter === 'available') {
-                if (!item.available_on) return false; // Must have SOME provider
+                if (!item.available_on) return false;
+                if (userServices.size > 0) {
+                    const cleanAvail = item.available_on.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                    const hasMatchingSub = Array.from(userServices).some(subName => {
+                        const cleanSub = subName.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                        return cleanAvail.includes(cleanSub) || cleanSub.includes(cleanAvail);
+                    });
+                    if (!hasMatchingSub) return false;
+                }
             } else if (providerFilter === 'unavailable') {
-                if (item.available_on) return false; // Must NOT have a provider
+                if (item.available_on) {
+                    if (userServices.size > 0) {
+                        const cleanAvail = item.available_on.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                        const hasMatchingSub = Array.from(userServices).some(subName => {
+                            const cleanSub = subName.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                            return cleanAvail.includes(cleanSub) || cleanSub.includes(cleanAvail);
+                        });
+                        if (hasMatchingSub) return false;
+                    } else {
+                        return false;
+                    }
+                }
             } else {
-                // Specific provider map
-                if (item.available_on !== providerFilter) return false;
+                if (!item.available_on) return false;
+                const cleanItemProv = item.available_on.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                const cleanFilterProv = providerFilter.toLowerCase().replace(/\s*(plus|\+)\s*/g, '').trim();
+                if (cleanItemProv !== cleanFilterProv && !cleanItemProv.includes(cleanFilterProv) && !cleanFilterProv.includes(cleanItemProv)) {
+                    return false;
+                }
             }
         }
 
@@ -458,8 +504,11 @@ export default function WatchlistPage() {
                             { value: 'all', label: 'All Availability' },
                             { value: 'available', label: 'On My Services' },
                             { value: 'unavailable', label: 'Not on My Services' },
-                            ...Array.from(new Set(items.map(i => i.available_on).filter(Boolean))).sort().map(p => ({
-                                value: p!, label: p!
+                            ...(regionalServices.length > 0
+                                ? regionalServices
+                                : Array.from(new Set(items.map(i => i.available_on).filter((p): p is string => Boolean(p))))
+                            ).sort().map((p: string) => ({
+                                value: p, label: p
                             }))
                         ]}
                         onChange={(val) => setProviderFilter(val as string)}

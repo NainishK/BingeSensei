@@ -1176,10 +1176,10 @@ def get_similar_recommendations(force_refresh: bool = False, db: Session = Depen
     return recommendations.get_similar_content(db, user_id=current_user.id, force_refresh=force_refresh)
 
 @app.post("/recommendations/refresh")
-def refresh_recommendations_endpoint(type: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    """Force refresh recommendations synchronously"""
+def refresh_recommendations_endpoint(type: str = None, force_trending: bool = False, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    """Force refresh recommendations. Preserves 24h Trending cache unless force_trending=True."""
     import recommendations
-    recommendations.refresh_recommendations(db, user_id=current_user.id, force=True, category=type)
+    recommendations.refresh_recommendations(db, user_id=current_user.id, force=True, force_trending=force_trending, category=type)
     return {"message": "Recommendations refreshed"}
 
 
@@ -1731,12 +1731,14 @@ def get_subscription_coverage(
 
 
 @app.get("/services/", response_model=list[schemas.Service])
-def read_services(db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    return crud.get_services(db, country=current_user.country)
+def read_services(country: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    target_country = country if country else (current_user.country or "US")
+    return crud.get_services(db, country=target_country)
 
 @app.get("/services/{service_id}/plans", response_model=list[schemas.Plan])
-def read_plans(service_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    return crud.get_plans(db, service_id=service_id, country=current_user.country)
+def read_plans(service_id: int, country: str = None, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    target_country = country if country else (current_user.country or "US")
+    return crud.get_plans(db, service_id=service_id, country=target_country)
 
 @app.put("/users/me", response_model=schemas.User)
 def update_user_me(country: str, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):

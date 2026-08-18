@@ -5,11 +5,10 @@ import api from '@/lib/api';
 import Link from 'next/link';
 import styles from './profile.module.css';
 import {
-    ArrowLeft, CheckCircle, AlertCircle, Bug, Save, Download,
+    ArrowLeft, CheckCircle, AlertCircle, Save, Download,
     User, Settings, Users, Clock, Globe, Monitor, Ban
 } from 'lucide-react';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import ReportIssueModal from '@/components/ReportIssueModal';
 import ImportExportModal from '@/components/ImportExportModal';
 import CustomSelect from '@/components/CustomSelect';
 import { useRecommendations } from '@/context/RecommendationsContext';
@@ -49,7 +48,6 @@ export default function Profile() {
     const [message, setMessage] = useState('');
     const [saving, setSaving] = useState(false);
     const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
-    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const [preferences, setPreferences] = useState<UserPreferences>({
@@ -268,10 +266,6 @@ export default function Profile() {
                                     {message}
                                 </div>
                             )}
-
-                            <button type="button" className={styles.reportBtn} onClick={() => setIsReportModalOpen(true)}>
-                                <Bug size={16} /> Report an Issue
-                            </button>
                         </form>
                     )}
 
@@ -459,11 +453,6 @@ export default function Profile() {
                 message="Are you sure you want to disconnect your Google account? You'll need your password to log in next time."
                 confirmLabel="Disconnect"
                 isDangerous={true}
-            />
-
-            <ReportIssueModal
-                visible={isReportModalOpen}
-                onClose={() => setIsReportModalOpen(false)}
             />
 
             <ImportExportModal

@@ -10,11 +10,13 @@ import {
     Settings,
     LogOut,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    MessageSquarePlus
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from '@/context/ThemeContext';
 import ConfirmationModal from './ConfirmationModal';
+import ReportIssueModal from './ReportIssueModal';
 import CountryFlag from './CountryFlag';
 import styles from './Sidebar.module.css';
 
@@ -29,6 +31,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
     const pathname = usePathname();
     const router = useRouter();
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+    const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
     
     const { theme } = useTheme();
     const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
@@ -150,6 +153,23 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                             </Link>
                         );
                     })}
+
+                    <button
+                        type="button"
+                        className={`${styles.navItem} ${styles.feedbackNavItem}`}
+                        title={isCollapsed ? "Give Feedback & Report Issues" : ""}
+                        onClick={() => {
+                            setFeedbackModalOpen(true);
+                            if (window.innerWidth < 768) {
+                                toggle();
+                            }
+                        }}
+                    >
+                        <span className={styles.icon}>
+                            <MessageSquarePlus size={22} strokeWidth={2} />
+                        </span>
+                        {!isCollapsed && <span className={styles.label}>Feedback</span>}
+                    </button>
                 </nav>
 
                 <div className={styles.footer}>
@@ -179,6 +199,12 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                     </button>
                 </div>
             </aside>
+
+            <ReportIssueModal
+                visible={feedbackModalOpen}
+                onClose={() => setFeedbackModalOpen(false)}
+                defaultCategory="feature"
+            />
 
             <ConfirmationModal
                 isOpen={logoutModalOpen}

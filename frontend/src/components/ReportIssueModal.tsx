@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Bug, Lightbulb, MessageSquare, Send, CheckCircle, AlertCircle, Paperclip, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import styles from './ReportIssueModal.module.css';
@@ -8,21 +9,36 @@ import styles from './ReportIssueModal.module.css';
 interface ReportIssueModalProps {
     visible: boolean;
     onClose: () => void;
+    defaultCategory?: string;
 }
 
 const CATEGORIES = [
-    { value: 'bug', label: 'Bug Report', icon: Bug, color: '#ef4444' },
     { value: 'feature', label: 'Feature Request', icon: Lightbulb, color: '#f59e0b' },
+    { value: 'bug', label: 'Bug Report', icon: Bug, color: '#ef4444' },
     { value: 'other', label: 'General Feedback', icon: MessageSquare, color: '#3b82f6' }
 ];
 
-export default function ReportIssueModal({ visible, onClose }: ReportIssueModalProps) {
-    const [category, setCategory] = useState('bug');
+export default function ReportIssueModal({ visible, onClose, defaultCategory = 'feature' }: ReportIssueModalProps) {
+    const [mounted, setMounted] = useState(false);
+    const [category, setCategory] = useState(defaultCategory);
     const [description, setDescription] = useState('');
     const [screenshots, setScreenshots] = useState<{ base64: string; name: string }[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (visible) {
+            setCategory(defaultCategory);
+            setDescription('');
+            setScreenshots([]);
+            setResult(null);
+        }
+    }, [visible, defaultCategory]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -70,10 +86,9 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
             const response = await api.post('/feedback/report', payload);
             setResult({
                 type: 'success',
-                message: `Issue #${response.data.issue_number} created successfully! Thank you for your feedback.`
+                message: `Thank you! Your ${category === 'bug' ? 'bug report' : category === 'feature' ? 'feature request' : 'feedback'} (#${response.data.issue_number}) was submitted.`
             });
             setDescription('');
-            setCategory('bug');
             setScreenshots([]);
         } catch (error: any) {
             setResult({
@@ -88,7 +103,6 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
     const handleClose = () => {
         setResult(null);
         setDescription('');
-        setCategory('bug');
         setScreenshots([]);
         onClose();
     };
@@ -97,9 +111,9 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
         if (e.target === e.currentTarget) handleClose();
     };
 
-    if (!visible) return null;
+    if (!visible || !mounted) return null;
 
-    return (
+    const modalContent = (
         <div className={styles.overlay} onClick={handleBackdropClick}>
             <div className={styles.modal}>
                 <button className={styles.closeButton} onClick={handleClose}>
@@ -107,8 +121,16 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                 </button>
 
                 <div className={styles.header}>
-                    <h2 className={styles.title}>Report an Issue</h2>
-                    <p className={styles.subtitle}>Help us improve BingeSensei</p>
+                    <h2 className={styles.title}>
+                        {category === 'feature' ? 'Share Feedback & Ideas' : category === 'bug' ? 'Report an Issue' : 'General Feedback'}
+                    </h2>
+                    <p className={styles.subtitle}>
+                        {category === 'feature'
+                            ? 'Have an idea or suggestion for BingeSensei?'
+                            : category === 'bug'
+                                ? 'Found a bug or glitch? Let us know so we can fix it!'
+                                : 'Tell us about your experience with BingeSensei.'}
+                    </p>
                 </div>
 
                 {/* Category Selector */}
@@ -198,4 +220,6 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }

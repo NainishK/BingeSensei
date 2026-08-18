@@ -261,13 +261,17 @@ export default function SubscriptionsPage() {
         }
 
         try {
+            const selectedService = services.find(s => s.id === Number(selectedServiceId));
+            const selectedPlan = plans.find(p => p.id === Number(selectedPlanId));
+            const targetCountry = selectedPlan?.country || selectedService?.country || userCountry;
+
             if (isEditing && editSubId) {
-                await api.put(`/subscriptions/${editSubId}`, { ...newSub, country: userCountry });
+                await api.put(`/subscriptions/${editSubId}`, { ...newSub, country: targetCountry });
             } else {
                 const subData = {
                     ...newSub,
                     start_date: new Date().toISOString().split('T')[0],
-                    country: userCountry
+                    country: targetCountry
                 };
                 await api.post('/subscriptions/', subData);
             }
