@@ -128,6 +128,17 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
         }
     }, [isOpen]);
 
+    // Lock background page scroll when modal is open
+    useEffect(() => {
+        if (isOpen) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [isOpen]);
+
 
 
     // Auto-Generate logic: Only if previously generated FOR THIS REGION or user explicitly clicked
@@ -463,7 +474,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                     </div>
                                                 )}
                                                 {data && (
-                                                    <div style={{ opacity: loading ? 0.5 : 1, transition: 'opacity 0.4s' }}>
+                                                    <div className={`${styles.strategyWrapper} ${loading ? styles.strategyDimmed : ''}`}>
                                                         <div className={styles.strategyList}>
                                                             {data.strategy.map((item, idx) => (
                                                                 <div key={idx} className={styles.strategyCard}>

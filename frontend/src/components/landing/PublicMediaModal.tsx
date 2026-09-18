@@ -32,6 +32,15 @@ export default function PublicMediaModal({ item, onClose }: Props) {
         return () => document.removeEventListener('keydown', handler);
     }, [onClose]);
 
+    // Lock background page scroll while modal is open
+    useEffect(() => {
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = originalOverflow;
+        };
+    }, []);
+
     const backdropUrl = item.backdrop_path
         ? `${TMDB_IMAGE_BASE}w1280${item.backdrop_path}`
         : null;

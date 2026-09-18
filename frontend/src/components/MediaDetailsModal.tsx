@@ -67,6 +67,17 @@ export default function MediaDetailsModal({
 }: MediaDetailsModalProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
+
+    // Lock background page scroll when details modal is open
+    useEffect(() => {
+        if (visible) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [visible]);
     const [details, setDetails] = useState<MediaDetails | null>(null);
     const [providers, setProviders] = useState<ProvidersData | null>(null);
     const [loading, setLoading] = useState(true);
