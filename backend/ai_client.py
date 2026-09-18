@@ -122,7 +122,10 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
             if s['name'] not in seen_sub_names:
                 seen_sub_names.add(s['name'])
                 deduped_subs.append(s)
-        subs_text = ", ".join([f"{s['name']}" for s in deduped_subs])
+        subs_text = ", ".join([
+            f"{s['name']} ({currency} {s.get('cost', '')}/{s.get('billing', 'monthly')})" if s.get('cost') else s['name']
+            for s in deduped_subs
+        ])
     else:
         for s in active_subs:
             if s not in seen_sub_names:
@@ -176,16 +179,17 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
     
     Task: Provide a 3-part comprehensive report in STRICT JSON format:
     1. "picks": 35 Hidden Gems/Matches. Priority to active subs. Diverse mix of genres. (We will filter best 6).
-    2. "strategy": 1-3 Financial Actions (Cancel/Add). ALL monetary values must be in {currency}.
+    2. "strategy": 1-3 Financial Actions (Cancel/Add). Pay close attention to whether the user has a monthly or yearly subscription for each service. If recommending cancellation of a yearly plan, refer to annual savings, not monthly. ALL monetary values must be in {currency}.
     3. "gaps": 25 specific titles they are MISSING OUT on. These MUST be from services the user does NOT subscribe to: {not_subscribed_text}. Do NOT suggest anything from: {subs_text}. The goal is to show compelling content that could justify subscribing to a new service. Diverse mix of genres. (We will filter best 3).
     
     IMPORTANT RULES:
-    1. Use CANONICAL TITLES only (e.g. "Severance", NOT "Severance Season 2").
-    2. Ratings mentioned in "reason" must be on a 10-star scale.
-    3. REGIONAL CONTEXT (India): "JioCinema" and "Disney+ Hotstar" are merging into "JioHotstar". Treat them as a consolidated entity.
-    4. NO DUPLICATES: Do NOT recommend any title that is already listed in "User's Watch History" (even if status is 'plan_to_watch'). The user wants NEW discoveries, not reminders.
-    5. STRATEGY CONSISTENCY: Do not provide conflicting advice for the same service (e.g. do NOT suggest Cancelling AND Upgrading/Keeping the same service). Cancellation advice overrides optimization.
-    6. FORMATTING: Output "reason" as a single clean paragraph. Do NOT include trailing numbers, bullet points, or list indexes inside the text fields.
+    1. QUALITY STANDARDS: Only recommend high-quality, acclaimed, or popular mainstream movies and TV series (e.g. TMDB/IMDb rating >= 6.5). NEVER recommend obscure documentary shorts, DVD bonus featurettes, behind-the-scenes specials, unrated student films, or unreleased titles.
+    2. Use CANONICAL TITLES only (e.g. "Rocket Boys", NOT "The Rocket Boys"; "Severance", NOT "Severance Season 2"; "The Bear", NOT "The Bear Season 1").
+    3. Ratings mentioned in "reason" must be on a 10-star scale.
+    4. REGIONAL CONTEXT (India): "JioCinema" and "Disney+ Hotstar" are merging into "JioHotstar". Treat them as a consolidated entity.
+    5. NO DUPLICATES: Do NOT recommend any title that is already listed in "User's Watch History" (even if status is 'plan_to_watch'). The user wants NEW discoveries, not reminders.
+    6. STRATEGY CONSISTENCY: Do not provide conflicting advice for the same service (e.g. do NOT suggest Cancelling AND Upgrading/Keeping the same service). Cancellation advice overrides optimization.
+    7. FORMATTING: Output "reason" as a single clean paragraph. Do NOT include trailing numbers, bullet points, or list indexes inside the text fields.
     
     IMPORTANT ON NEGATIVE FILTERING:
     - Analyzie "Dropped/Disliked" content to understand specific dislikes (e.g. "Too slow", "Bad acting"). 
@@ -195,7 +199,7 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
     Output JSON Structure:
     {{
         "picks": [ {{ "title": "...", "reason": "...", "service": "..." }} ],
-        "strategy": [ {{ "action": "Cancel" or "Add", "service": "...", "reason": "...", "savings": 10.0 }} ],
+        "strategy": [ {{ "action": "Cancel" or "Add", "service": "...", "reason": "...", "savings": 10.0, "billing_cycle": "monthly" or "yearly" }} ],
         "gaps": [ {{ "title": "...", "service": "...", "reason": "..." }} ]
     }}
     """
@@ -254,24 +258,45 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
         valid_picks = []
         seen_ids = set()
 
+        # Build set of cleaned active subscription names
+        active_sub_names = [s['name'].lower().replace(" ", "").replace("+", "") for s in active_subs]
+
         for r in data["picks"]:
-            # Check 1: Must have ID and Poster
+            # Check 1: Must have valid TMDB ID and Poster
             if not r.get("tmdb_id") or not r.get("poster_path"):
                 continue
 
-            # Check 2: Must NOT be in Watchlist
+            # Check 2: Quality Gate - Must have a reasonable rating (at least 5.5, never 0.0)
+            rating = r.get("vote_average", 0.0) or 0.0
+            if rating < 5.5:
+                logger.info(f"Skipping Pick {r.get('title')} - low/zero rating ({rating})")
+                continue
+
+            # Check 3: Must NOT be in Watchlist
             if r.get("tmdb_id") in watchlist_ids:
                 logger.info(f"Skipping Pick: {r.get('title')} - in watchlist")
                 continue
 
-            # Check 3: Must not be ignored
+            # Check 4: Must not be ignored
             if str(r.get("tmdb_id")) in ignored_ids:
                 logger.info(f"Skipping Pick: {r.get('title')} - ignored")
                 continue
 
-            # Check 4: No duplicate within picks
+            # Check 5: No duplicate within picks
             if r.get("tmdb_id") in seen_ids:
                 continue
+
+            # Check 6: Streamability on user's active services
+            # Curator picks are explicitly "Tap to Watch (On your services)"
+            provs = r.get("providers", [])
+            if provs and active_sub_names:
+                matches_active_sub = any(
+                    any(sub_clean in p.replace(" ", "").replace("+", "") or p.replace(" ", "").replace("+", "") in sub_clean for sub_clean in active_sub_names)
+                    for p in provs
+                )
+                if not matches_active_sub:
+                    logger.info(f"Skipping Pick {r.get('title')} - not on active subs ({provs})")
+                    continue
 
             valid_picks.append(r)
             seen_ids.add(r.get("tmdb_id"))
@@ -297,6 +322,13 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
             tmdb_id = gap.get("tmdb_id")
             if not tmdb_id or not gap.get("poster_path"):
                 continue
+
+            # Quality Gate: Never accept 0.0 or low rating (< 5.5)
+            rating = gap.get("vote_average", 0.0) or 0.0
+            if rating < 5.5:
+                logger.info(f"Skipping Gap {gap.get('title')} - low/zero rating ({rating})")
+                continue
+
             if tmdb_id in watchlist_ids:
                 logger.info(f"Skipping Gap: {gap.get('title')} - in watchlist")
                 continue
@@ -312,79 +344,162 @@ def generate_unified_insights(user_history: list, user_ratings: list, active_sub
 
     return data
 
+def find_best_tmdb_candidate(title: str, hint_type: str = None, country: str = "US"):
+    """
+    Robustly resolves a title against TMDB by querying multiple variations,
+    penalizing obscure 0-vote / 0-rating DVD extras, and rewarding popular, highly-rated titles.
+    """
+    if not title:
+        return None
+
+    queries = []
+    # 1. Cleaned title (remove Season suffix)
+    c1 = re.sub(r':\s*Season\s+\d+|\s+Season\s+\d+', '', title, flags=re.IGNORECASE).strip()
+    queries.append(c1)
+
+    # 2. Strip leading articles (The / A / An)
+    c2 = re.sub(r'^(the|a|an)\s+', '', c1, flags=re.IGNORECASE).strip()
+    if c2 and c2.lower() != c1.lower():
+        queries.append(c2)
+
+    # 3. Strip subtitle after colon or dash
+    if ':' in c1:
+        c3 = c1.split(':')[0].strip()
+        if c3 and c3 not in queries:
+            queries.append(c3)
+    if ' - ' in c1:
+        c4 = c1.split(' - ')[0].strip()
+        if c4 and c4 not in queries:
+            queries.append(c4)
+
+    all_results = []
+    seen = set()
+    for q in queries:
+        try:
+            res = tmdb_client.search_multi(q).get('results', [])
+            for r in res:
+                rid = (r.get('media_type'), r.get('id'))
+                if rid not in seen:
+                    seen.add(rid)
+                    all_results.append((q, r))
+        except Exception as e:
+            logger.warning(f"Error searching TMDB for '{q}': {e}")
+
+    if not all_results:
+        return None
+
+    scored = []
+    for q, r in all_results:
+        t = (r.get('title') or r.get('name') or '').strip()
+        if not t:
+            continue
+        pop = float(r.get('popularity', 0.0) or 0.0)
+        votes = int(r.get('vote_count', 0) or 0)
+        rating = float(r.get('vote_average', 0.0) or 0.0)
+        has_poster = bool(r.get('poster_path'))
+        m_type = r.get('media_type')
+
+        score = 0.0
+        t_lower = t.lower()
+        title_lower = title.lower()
+        c1_lower = c1.lower()
+        c2_lower = c2.lower()
+
+        if t_lower == title_lower or t_lower == c1_lower:
+            score += 60.0
+        elif t_lower == c2_lower:
+            score += 50.0
+        elif title_lower in t_lower or t_lower in title_lower:
+            score += 25.0
+        elif c2_lower in t_lower or t_lower in c2_lower:
+            score += 20.0
+
+        if hint_type and m_type == hint_type:
+            score += 15.0
+
+        if has_poster:
+            score += 15.0
+        else:
+            score -= 20.0
+
+        if votes >= 100:
+            score += 25.0
+        elif votes >= 20:
+            score += 15.0
+        elif votes > 0:
+            score += 5.0
+        else:
+            score -= 40.0  # Massive penalty for 0 votes!
+
+        if rating >= 7.0:
+            score += 15.0
+        elif rating >= 5.0:
+            score += 5.0
+        elif rating == 0.0:
+            score -= 30.0  # Massive penalty for 0.0 rating!
+
+        score += min(pop, 25.0)
+        scored.append((score, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_candidate = scored[0][1] if scored else None
+    return best_candidate
+
 def _enrich_item(item):
-    """Helper to add TMDB data to an item dict"""
+    """Helper to add TMDB data to an item dict with strict quality gating"""
     try:
         country = item.pop("_country", "US")
-        # Clean title for better matching (remove Season suffix)
-        clean_title = re.sub(r':\s*Season\s+\d+|\s+Season\s+\d+', '', item['title'], flags=re.IGNORECASE).strip()
-        
-        # Primary Search
-        results = tmdb_client.search_multi(clean_title)
-        
-        # Fallback: If no results and title has special chars, try simplifying further
-        if not results.get('results') and ':' in clean_title:
-             simple_title = clean_title.split(':')[0].strip()
-             results = tmdb_client.search_multi(simple_title)
+        raw_title = item.get('title', '')
+        reason = item.get('reason', '').lower()
 
-        if results.get('results'):
-            # Look for an exact match first (case-insensitive)
-            best = None
-            query_lower = clean_title.lower().strip()
-            
-            for candidate in results['results']:
-                cand_title = (candidate.get('title') or candidate.get('name') or '').lower().strip()
-                if cand_title == query_lower:
-                    best = candidate
-                    break
-            
-            # If no exact match, fall back to first result
-            if not best:
-                best = results['results'][0]
-                
-            item['tmdb_id'] = best.get('id')
-            item['media_type'] = best.get('media_type', 'movie') # Default to movie if unspecified, but API usually sends it
-            
-            # Synchronize title to avoid mismatched headings in UI
-            matched_title = best.get('title') or best.get('name')
-            if matched_title:
-                item['title'] = matched_title
-                
-            item['poster_path'] = best.get('poster_path')
-            item['vote_average'] = best.get('vote_average')
-            item['overview'] = best.get('overview')
+        # Infer hint type from reason text
+        hint_type = None
+        if any(w in reason for w in ['series', 'show', 'season', 'miniseries', 'episodes']):
+            hint_type = 'tv'
+        elif any(w in reason for w in ['movie', 'film', 'cinema']):
+            hint_type = 'movie'
 
-            # Fetch watch providers for filtering
+        best = find_best_tmdb_candidate(raw_title, hint_type=hint_type, country=country)
+
+        if not best:
+            return
+
+        # Quality check: Reject if no poster or 0 votes with 0 rating
+        vote_count = best.get('vote_count', 0) or 0
+        vote_avg = float(best.get('vote_average', 0.0) or 0.0)
+        poster = best.get('poster_path')
+
+        if not poster or (vote_count == 0 and vote_avg == 0.0):
+            logger.info(f"Rejecting low-quality TMDB match for {raw_title}: poster={bool(poster)}, votes={vote_count}")
+            return
+
+        item['tmdb_id'] = best.get('id')
+        item['media_type'] = best.get('media_type', 'movie')
+        item['title'] = best.get('title') or best.get('name') or raw_title
+        item['poster_path'] = poster
+        item['vote_average'] = vote_avg
+        item['overview'] = best.get('overview')
+
+        # Fetch watch providers for region (flatrate, ads, free)
+        try:
+            providers_data = tmdb_client.get_watch_providers(item['media_type'], item['tmdb_id'], region=country)
+            all_provs = providers_data.get('flatrate', []) + providers_data.get('ads', []) + providers_data.get('free', [])
+            item['providers'] = list({p['provider_name'].lower().strip() for p in all_provs if p.get('provider_name')})
+        except Exception as e:
+            logger.warning(f"Failed to fetch watch providers for {item['title']}: {e}")
+            item['providers'] = []
+
+        # If rating or overview is missing, try full details
+        if not item['vote_average'] or not item['overview']:
             try:
-                providers_data = tmdb_client.get_watch_providers(item['media_type'], item['tmdb_id'], region=country)
-                flatrate = providers_data.get('flatrate', [])
-                item['providers'] = [p['provider_name'].lower().strip() for p in flatrate]
+                full_details = tmdb_client.get_details(item['media_type'], item['tmdb_id'])
+                if full_details:
+                    if full_details.get('vote_average'):
+                        item['vote_average'] = full_details.get('vote_average')
+                    if full_details.get('overview'):
+                        item['overview'] = full_details.get('overview')
             except Exception as e:
-                logger.warning(f"Failed to fetch watch providers for {clean_title}: {e}")
-                item['providers'] = []
+                logger.warning(f"Failed to fetch full details: {e}")
 
-            # Quality Check: If rating or overview is missing/incomplete, try fetching full details
-            if not item['vote_average'] or not item['overview']:
-                try:
-                    full_details = tmdb_client.get_details(item['media_type'], item['tmdb_id'])
-                    if full_details:
-                         if full_details.get('vote_average'):
-                             item['vote_average'] = full_details.get('vote_average')
-                         if full_details.get('overview'):
-                             item['overview'] = full_details.get('overview')
-                         logger.info(f"Enriched {clean_title} via get_details logic. Rating: {item['vote_average']}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch full details for enrichment fallback: {e}")
-            
-            # Correction: if we searched for a show but got movie default, trust TMDB
-            # If nothing found, try to infer from title (e.g. if "Season" was present originally)
-            
-        elif "Season" in item['title']:
-             item['media_type'] = 'tv' # Fallback for TV shows if TMDB fails
-             
     except Exception as e:
         logger.error(f"Enrichment Failed for {item.get('title')}: {e}")
-        print(f"DEBUG: Enrichment Failed for {item.get('title')}: {e}")
-
-def explain_recommendation(title: str, user_history_summary: str):
-    pass

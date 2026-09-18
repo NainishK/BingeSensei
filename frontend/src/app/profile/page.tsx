@@ -98,6 +98,8 @@ export default function Profile() {
             localStorage.removeItem('binge_subs_cache');
             localStorage.removeItem('binge_dash_cache');
             localStorage.removeItem('binge_watchlist_cache');
+            localStorage.removeItem('last_ai_region');
+            setPreferences(prev => ({ ...prev, target_currency: COUNTRY_CURRENCY_MAP[country] || 'USD' }));
             setMessage('Settings saved!');
             setTimeout(() => setMessage(''), 3000);
             if (user) setUser({ ...user, country });
