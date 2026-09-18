@@ -13,6 +13,7 @@
     padding-top: 3rem;
     z-index: 1200;
     animation: fadeIn 0.2s ease-out;
+    overscroll-behavior: contain;
 }
 
 .modal {
@@ -41,6 +42,7 @@
     position: relative;
     overflow: hidden;
     border: 1px solid #e2e8f0;
+    overscroll-behavior: contain;
 }
 
 .header {
@@ -146,9 +148,19 @@
 .content {
     flex: 1;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 1.5rem;
     background: transparent;
     /* Show Aurora */
+}
+
+.strategyWrapper {
+    width: 100%;
+    transition: opacity 0.4s ease;
+}
+
+.strategyDimmed {
+    opacity: 0.5;
 }
 
 /* Grid Layouts */
