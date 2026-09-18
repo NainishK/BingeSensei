@@ -543,6 +543,9 @@ def update_profile(
                      for k in keys_to_clear:
                          del prefs[k]
                  
+                 # Always align target_currency with the updated region
+                 prefs["target_currency"] = COUNTRY_CURRENCY_MAP.get(new_country, "USD")
+                 
                  # Clean up legacy keys
                  if "budget" in prefs: del prefs["budget"]
                  if "regional_budgets" in prefs: del prefs["regional_budgets"] 
@@ -1176,6 +1179,63 @@ def refresh_recommendations_endpoint(type: str = None, force_trending: bool = Fa
 
 
 
+def enrich_strategy_items(strategy_list: list, user_subscriptions: list) -> list:
+    """
+    Robustly matches strategy items to user's active subscriptions for the current country,
+    aligning billing_cycle ('yearly' vs 'monthly') and savings,
+    replacing 'monthly' wording with 'annual' if the plan is yearly,
+    and filtering out any 'Cancel' recommendations for subscriptions that do NOT belong to this country profile.
+    """
+    if not strategy_list:
+        return []
+    if not user_subscriptions:
+        return [s for s in strategy_list if s.get("action") != "Cancel"]
+        
+    import re
+    def _clean(s: str) -> str:
+        return re.sub(r'[^a-z0-9]', '', (s or "").lower())
+        
+    valid_strategies = []
+    for strat in strategy_list:
+        service_name = strat.get("service", "")
+        target_clean = _clean(service_name)
+        if not target_clean:
+            continue
+            
+        matched_sub = None
+        # 1. Exact cleaned match (e.g. 'sonyliv' == 'sonyliv' for 'Sony LIV')
+        for sub in user_subscriptions:
+            if _clean(sub.service_name) == target_clean:
+                matched_sub = sub
+                break
+                
+        # 2. Substring match (e.g. 'primevideo' in 'amazonprimevideo', or 'appletv' in 'appletv+')
+        if not matched_sub:
+            for sub in user_subscriptions:
+                sub_clean = _clean(sub.service_name)
+                if sub_clean and (target_clean in sub_clean or sub_clean in target_clean):
+                    matched_sub = sub
+                    break
+                    
+        if strat.get("action") == "Cancel":
+            # If the user does not have this subscription in this country profile, discard it!
+            if not matched_sub:
+                continue
+
+        if matched_sub:
+            sub_billing = (matched_sub.billing_cycle or "").lower()
+            is_yearly = "year" in sub_billing or "annual" in sub_billing
+            strat["billing_cycle"] = "yearly" if is_yearly else "monthly"
+            if strat.get("action") == "Cancel" and matched_sub.cost:
+                strat["savings"] = matched_sub.cost
+            if is_yearly and strat.get("reason"):
+                strat["reason"] = re.sub(r'\bmonthly\b', 'annual', strat["reason"], flags=re.IGNORECASE)
+
+        valid_strategies.append(strat)
+
+    return valid_strategies
+
+
 @app.post("/recommendations/insights", response_model=schemas.AIUnifiedResponse)
 
 def get_unified_insights(
@@ -1190,9 +1250,10 @@ def get_unified_insights(
     
     # Check cache first? (Optional - lets do fresh for now or cache with 24h expiry)
     import recommendations
-    if current_user.subscriptions and not force_refresh: 
+    country = current_user.country or "US"
+    user_country_subs = [s for s in current_user.subscriptions if s.is_active and s.country == country and s.category == 'OTT']
+    if user_country_subs and not force_refresh: 
          # Using a distinct category for this unified blob, now keyed by country
-         country = current_user.country or "US"
          cache_key = f"unified_insights_{country}"
          print(f"DEBUG: Checking cache for user {current_user.id} with key: {cache_key}")
          cached = recommendations.get_cached_data(db, user_id=current_user.id, category=cache_key)
@@ -1219,11 +1280,9 @@ def get_unified_insights(
                  
                  # Enrich Strategy Items in Cache Hit
                  if "strategy" in cached:
-                     billing_map = {s.service_name.lower().strip(): s.billing_cycle.lower().strip() for s in current_user.subscriptions}
-                     for strat in cached["strategy"]:
-                         service_name = strat.get("service", "").lower().strip()
-                         billing_cycle = billing_map.get(service_name, "monthly")
-                         strat["billing_cycle"] = "yearly" if "year" in billing_cycle or "annual" in billing_cycle else "monthly"
+                     cached["strategy"] = enrich_strategy_items(cached["strategy"], user_country_subs)
+                 cached["country"] = country
+                 cached["currency"] = get_country_currency(country)
                  return cached
 
     # 1. Check Permissions (Only if we need to generate)
@@ -1238,7 +1297,11 @@ def get_unified_insights(
              
              # If we have cache, use it
              if fallback and (fallback.get('picks') or fallback.get('strategy')):
+                 if "strategy" in fallback:
+                     fallback["strategy"] = enrich_strategy_items(fallback["strategy"], user_country_subs)
                  fallback['warning'] = "Daily AI limit reached. Viewing cached results from last compliant generation."
+                 fallback["country"] = country
+                 fallback["currency"] = get_country_currency(country)
                  return fallback
                  
              # IF NO CACHE and LIMIT REACHED:
@@ -1258,7 +1321,8 @@ def get_unified_insights(
     subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
         models.Subscription.is_active == True,
-        models.Subscription.category == 'OTT'
+        models.Subscription.category == 'OTT',
+        models.Subscription.country == country
     ).all()
     
     # Parse Preferences
@@ -1390,14 +1454,12 @@ def get_unified_insights(
 
     # Enrich Strategy Items with their actual billing cycle from user subscriptions
     if "strategy" in insights:
-        billing_map = {s.service_name.lower().strip(): s.billing_cycle.lower().strip() for s in subs}
-        for strat in insights["strategy"]:
-            service_name = strat.get("service", "").lower().strip()
-            billing_cycle = billing_map.get(service_name, "monthly")
-            strat["billing_cycle"] = "yearly" if "year" in billing_cycle or "annual" in billing_cycle else "monthly"
+        insights["strategy"] = enrich_strategy_items(insights["strategy"], subs)
         
     # Cache
     country = current_user.country or "US"
+    insights["country"] = country
+    insights["currency"] = currency
     recommendations.set_cached_data(db, user_id=current_user.id, category=f"unified_insights_{country}", data=insights)
     
     # SUCCESS: Now we save the skip counts (if any)

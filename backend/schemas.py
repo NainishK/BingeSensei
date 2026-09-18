@@ -187,6 +187,8 @@ class AIUnifiedResponse(BaseModel):
     strategy: List[AIStrategyItem]
     gaps: List[AIGapItem]
     warning: Optional[str] = None # To convey limits or stale data info
+    country: Optional[str] = None
+    currency: Optional[str] = None
 
 class TopService(BaseModel):
     name: str

@@ -53,6 +53,9 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
         try {
             const res = await api.get('/users/me/');
             if (res.data.country) {
+                if (res.data.country !== userCountry) {
+                    setData(null);
+                }
                 setUserCountry(res.data.country);
             }
             if (res.data.preferences) {
@@ -96,7 +99,14 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                 // Update local usage state if success
                 setLastAiUsage(new Date().toISOString());
                 // Save region to prevent re-generation on reload/reopen
-                localStorage.setItem('last_ai_region', userCountry);
+                const countrySaved = res.data.country || userCountry;
+                try {
+                    const existing: string[] = JSON.parse(localStorage.getItem('binge_ai_regions') || '[]');
+                    if (!existing.includes(countrySaved)) {
+                        localStorage.setItem('binge_ai_regions', JSON.stringify([...existing, countrySaved]));
+                    }
+                } catch { /* ignore */ }
+                localStorage.setItem('last_ai_region', countrySaved);
             } else {
                 setError("AI returned incomplete data. Please try again.");
             }
@@ -144,10 +154,14 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
     // Auto-Generate logic: Only if previously generated FOR THIS REGION or user explicitly clicked
     useEffect(() => {
         if (isOpen && aiAllowed && hasData && !autoLoadRef.current) {
+            let generatedRegions: string[] = [];
+            try {
+                generatedRegions = JSON.parse(localStorage.getItem('binge_ai_regions') || '[]');
+            } catch { /* ignore */ }
             const lastRegion = localStorage.getItem('last_ai_region');
 
             // Only auto-generate if we've successfully generated for THIS country before
-            if (lastRegion === userCountry) {
+            if (generatedRegions.includes(userCountry) || lastRegion === userCountry) {
                 autoLoadRef.current = true;
                 handleGenerate(false);
             }
@@ -160,8 +174,9 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
 
 
     // Derived Currency Info
-    const currencySymbol = COUNTRY_SYMBOL_MAP[userCountry] || '$';
-    const currencyCode = COUNTRY_CURRENCY_MAP[userCountry] || 'USD';
+    const activeCountry = data?.country || userCountry;
+    const currencySymbol = COUNTRY_SYMBOL_MAP[activeCountry] || '$';
+    const currencyCode = COUNTRY_CURRENCY_MAP[activeCountry] || 'USD';
 
 
 
@@ -461,12 +476,6 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
 
                                         {activeTab === 'strategy' && (
                                             <>
-                                                {loading && data && (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', background: 'rgba(124,58,237,0.12)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.2)' }}>
-                                                        <RefreshCw size={14} className={styles.spin} />
-                                                        <span>Refreshing...</span>
-                                                    </div>
-                                                )}
                                                 {loading && !data && (
                                                     <div className={styles.loadingWrapper} style={{ minHeight: '300px' }}>
                                                         <RefreshCw className={styles.spin} size={48} color="#7c3aed" />

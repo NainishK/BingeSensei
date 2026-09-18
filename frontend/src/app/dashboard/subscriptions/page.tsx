@@ -6,7 +6,7 @@ import styles from './subscriptions.module.css';
 import { Subscription, Service, Plan } from '@/lib/types';
 import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info, ChevronDown } from 'lucide-react';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { formatCurrency, getCurrencySymbol } from '@/lib/currency';
+import { formatCurrency, getCurrencySymbol, COUNTRY_CURRENCY_MAP } from '@/lib/currency';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { ServiceIcon } from '@/components/ServiceIcon';
@@ -186,7 +186,7 @@ export default function SubscriptionsPage() {
             const profileRes = await api.get('/users/me/');
             const country = profileRes.data.country || 'US';
             setUserCountry(country);
-            setNewSub(prev => ({ ...prev, currency: country === 'IN' ? 'INR' : 'USD' }));
+            setNewSub(prev => ({ ...prev, currency: COUNTRY_CURRENCY_MAP[country] || 'USD' }));
 
             // 2. Fetch Subscriptions & Services for that Country
             const [subsRes, servicesRes] = await Promise.all([

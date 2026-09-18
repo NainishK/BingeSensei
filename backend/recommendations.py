@@ -28,8 +28,11 @@ def get_cached_data(db: Session, user_id: int, category: str, ttl_hours: int = 4
     if cache_entry and cache_entry.data:
         try:
             data = json.loads(cache_entry.data)
-            if data and isinstance(data, list) and len(data) > 0:
-                return data
+            if data:
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+                elif isinstance(data, dict) and bool(data):
+                    return data
         except Exception:
             return None
     return None
@@ -67,8 +70,11 @@ def get_cached_data_with_ttl(db: Session, user_id: int, category: str, ttl_hours
         if datetime.utcnow() - updated_at <= timedelta(hours=ttl_hours):
             try:
                 data = json.loads(cache_entry.data)
-                if data and isinstance(data, list) and len(data) > 0:
-                    return data
+                if data:
+                    if isinstance(data, list) and len(data) > 0:
+                        return data
+                    elif isinstance(data, dict) and bool(data):
+                        return data
             except Exception:
                 return None
     return None

@@ -109,4 +109,6 @@ export interface AIUnifiedResponse {
     strategy: AIStrategyItem[];
     gaps: AIGapItem[];
     warning?: string;
+    country?: string;
+    currency?: string;
 }
