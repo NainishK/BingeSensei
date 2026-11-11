@@ -1,6 +1,7 @@
 fastapi
 uvicorn
-sqlalchemy
+sqlalchemy[asyncio]
+greenlet
 psycopg2-binary
 psycopg[binary]
 python-multipart
