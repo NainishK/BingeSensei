@@ -3,15 +3,20 @@
 import Script from 'next/script';
 
 export default function GoogleAnalytics() {
-  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+  const tagId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'GTM-PWWN6VJK';
 
-  if (!gaId) return null;
+  if (!tagId) return null;
+
+  const isGTM = tagId.startsWith('GTM-');
+  const scriptSrc = isGTM
+    ? `https://www.googletagmanager.com/gtm.js?id=${tagId}`
+    : `https://www.googletagmanager.com/gtag/js?id=${tagId}`;
 
   return (
     <>
       <Script
         strategy="afterInteractive"
-        src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+        src={scriptSrc}
       />
       <Script
         id="google-analytics"
@@ -21,12 +26,11 @@ export default function GoogleAnalytics() {
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', '${gaId}', {
-              page_path: window.location.pathname,
-            });
+            ${!isGTM ? `gtag('config', '${tagId}', { page_path: window.location.pathname });` : ''}
           `,
         }}
       />
     </>
   );
 }
+
