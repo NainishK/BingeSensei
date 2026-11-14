@@ -6,6 +6,7 @@ import {
     LayoutDashboard,
     CreditCard,
     TvMinimalPlay,
+    Calendar,
     Sparkles,
     Settings,
     LogOut,
@@ -81,6 +82,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
         { name: 'Overview', icon: LayoutDashboard, path: '/dashboard/overview' },
         { name: 'Subscriptions', icon: CreditCard, path: '/dashboard/subscriptions' },
         { name: 'Watchlist', icon: TvMinimalPlay, path: '/dashboard/watchlist' },
+        { name: 'Calendar', icon: Calendar, path: '/dashboard/calendar' },
         { name: 'Recommendations', icon: Sparkles, path: '/dashboard/recommendations' },
         { name: 'Profile', icon: Settings, path: '/profile' },
     ];

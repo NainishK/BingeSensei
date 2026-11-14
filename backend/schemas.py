@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from datetime import date, datetime
 
 class SubscriptionBase(BaseModel):
@@ -47,6 +47,7 @@ class WatchlistItemBase(BaseModel):
     available_on: Optional[str] = None # Enriched field for UI badges
     original_language: Optional[str] = None # e.g. "ja" for anime detection
     notes: Optional[str] = None
+    is_followed: Optional[bool] = False
 
 class WatchlistNoteUpdate(BaseModel):
     notes: Optional[str] = None
@@ -57,6 +58,9 @@ class WatchlistRatingUpdate(BaseModel):
 class WatchlistProgressUpdate(BaseModel):
     current_season: int
     current_episode: int
+
+class WatchlistFollowUpdate(BaseModel):
+    is_followed: bool
 
 class WatchlistItemCreate(WatchlistItemBase):
     genre_ids: Optional[Union[List[int], str]] = None
@@ -76,8 +80,76 @@ class WatchlistItem(WatchlistItemBase):
     total_seasons: Optional[int] = 0
     total_episodes: Optional[int] = 0
 
+    # Radar fields
+    is_followed: Optional[bool] = False
+    next_air_date: Optional[date] = None
+    next_episode_season: Optional[int] = None
+    next_episode_number: Optional[int] = None
+    next_episode_name: Optional[str] = None
+    last_air_date: Optional[date] = None
+    last_episode_season: Optional[int] = None
+    last_episode_number: Optional[int] = None
+    last_episode_name: Optional[str] = None
+    last_episode_still: Optional[str] = None
+    air_status: Optional[str] = None
+    last_air_check: Optional[datetime] = None
+
     class Config:
         from_attributes = True
+
+# --- RADAR & CALENDAR SCHEMAS ---
+
+class UserRadarSettings(BaseModel):
+    notify_season_drops_only: bool = True
+    notify_watched_resurrect: bool = True
+    notify_movie_streaming: bool = True
+    viewing_preference: str = "weekly" # "weekly" or "binge"
+
+class ActivityDrop(BaseModel):
+    item_id: int
+    tmdb_id: int
+    title: str
+    media_type: str
+    poster_path: Optional[str] = None
+    backdrop_path: Optional[str] = None
+    available_on: Optional[str] = None
+    is_on_active_subscription: bool = False
+    drop_type: str # "new_season", "new_episode", "upcoming", "resurrected"
+    season_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    episode_name: Optional[str] = None
+    episode_still: Optional[str] = None
+    air_date: Optional[date] = None
+    days_relative: Optional[int] = None # negative = past days, 0 = today, positive = future days
+    status: str
+    current_season: Optional[int] = 0
+    current_episode: Optional[int] = 0
+    is_followed: bool = False
+
+class ActivityFeedResponse(BaseModel):
+    reel_items: List[ActivityDrop]
+    fresh_drops: List[ActivityDrop]
+    imminent_drops: List[ActivityDrop]
+    resurrected_shows: List[ActivityDrop]
+
+class CalendarEvent(BaseModel):
+    date: str # YYYY-MM-DD
+    drops: List[ActivityDrop]
+
+class ValueScorecardItem(BaseModel):
+    id: int
+    service_name: str
+    cost: float
+    currency: str
+    drop_count: int
+    value_label: str # "High Value", "Moderate Value", "Low Value", "Idle / Safe to Pause"
+    suggested_action: str
+
+class CalendarResponse(BaseModel):
+    month: str # YYYY-MM
+    events: List[CalendarEvent]
+    service_distribution: Dict[str, int]
+    value_scorecard: List[ValueScorecardItem]
 
 class PlanBase(BaseModel):
     name: str

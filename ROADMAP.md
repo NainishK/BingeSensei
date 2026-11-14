@@ -37,6 +37,7 @@ _Add future feature ideas below._
 
 ## ✅ Shipped
 
+- **Release Radar & Subscription Heatmap** — Follow priority TV shows, story reel for fresh & upcoming drops, automated "Watched" show resurrection when new seasons drop, interactive release calendar (Weekly Runway + Monthly Grid), and monthly Subscription Heatmap with financial value scorecards.
 - **In-App Bug Reporting** — Report Issue button in profile page, creates GitHub Issues via API (category + description)
 - **Anime Badge & Filter** — Japanese animation titles show ⚡ ANIME badge, mutually exclusive filter in watchlist
 - **Colored Status Themes** — Each watchlist status (Watching, Plan to Watch, Watched, Paused, Dropped) has a unique color applied to tab icons, active tab underlines, and status select dropdown icons

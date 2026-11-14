@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Star, Calendar, Clock, Film, Tv, Plus, Minus } from 'lucide-react';
+import { X, Star, Calendar, Clock, Film, Tv, Plus, Minus, Zap } from 'lucide-react';
 import api from '@/lib/api';
 import StarRating from './StarRating';
 import styles from './MediaDetailsModal.module.css';
@@ -28,6 +28,8 @@ interface MediaDetailsModalProps {
     onProgressChange?: (season: number, episode: number) => void;
     notes?: string;
     onNotesChange?: (notes: string) => void;
+    isFollowed?: boolean;
+    onToggleFollow?: () => void;
 }
 
 interface Provider {
@@ -63,7 +65,7 @@ interface MediaDetails {
 export default function MediaDetailsModal({
     visible, onClose, mediaType, tmdbId, initialData, addedAt, userRating, onRate,
     dbId, currentSeason = 0, currentEpisode = 0, onProgressChange, 
-    notes = "", onNotesChange
+    notes = "", onNotesChange, isFollowed = false, onToggleFollow
 }: MediaDetailsModalProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
@@ -191,6 +193,15 @@ export default function MediaDetailsModal({
                         <div className={styles.header}>
                             <h2 className={styles.title}>{initialData?.title}</h2>
                             {details?.tagline && <p style={{ fontStyle: 'italic', color: '#666', marginTop: 4 }}>{details.tagline}</p>}
+                            {mediaType === 'tv' && onToggleFollow && (
+                                <button
+                                    onClick={onToggleFollow}
+                                    className={`${styles.followBtn} ${isFollowed ? styles.followBtnActive : ''}`}
+                                >
+                                    <Zap size={14} fill={isFollowed ? 'currentColor' : 'none'} />
+                                    {isFollowed ? 'On Radar (Tracking Releases)' : 'Add to Radar (Notify Releases)'}
+                                </button>
+                            )}
                         </div>
 
                         <div className={styles.metaRow}>

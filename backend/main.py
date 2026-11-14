@@ -24,9 +24,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Include Routers
-from routers import auth, notifications
+from routers import auth, notifications, radar
 app.include_router(auth.router)
 app.include_router(notifications.router)
+app.include_router(radar.router)
 
 # [NEW] Logging Middleware
 @app.middleware("http")

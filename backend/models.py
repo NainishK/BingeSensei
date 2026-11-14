@@ -69,6 +69,20 @@ class WatchlistItem(Base):
     total_seasons = Column(Integer, default=0)
     total_episodes = Column(Integer, default=0)
 
+    # Release Tracking / Radar
+    is_followed = Column(Boolean, default=False)
+    next_air_date = Column(Date, nullable=True)
+    next_episode_season = Column(Integer, nullable=True)
+    next_episode_number = Column(Integer, nullable=True)
+    next_episode_name = Column(String, nullable=True)
+    last_air_date = Column(Date, nullable=True)
+    last_episode_season = Column(Integer, nullable=True)
+    last_episode_number = Column(Integer, nullable=True)
+    last_episode_name = Column(String, nullable=True)
+    last_episode_still = Column(String, nullable=True) # Episode backdrop thumbnail
+    air_status = Column(String, nullable=True) # "Returning Series", "Ended", "Canceled"
+    last_air_check = Column(DateTime(timezone=True), nullable=True)
+
     added_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User", back_populates="watchlist")

@@ -34,6 +34,18 @@ def run_migration():
             ("subscriptions", "country", "TEXT DEFAULT 'US'"),
             ("watchlist_items", "original_language", "TEXT"),
             ("watchlist_items", "notes", "TEXT"),
+            ("watchlist_items", "is_followed", "BOOLEAN DEFAULT 0"),
+            ("watchlist_items", "next_air_date", "DATE"),
+            ("watchlist_items", "next_episode_season", "INTEGER"),
+            ("watchlist_items", "next_episode_number", "INTEGER"),
+            ("watchlist_items", "next_episode_name", "TEXT"),
+            ("watchlist_items", "last_air_date", "DATE"),
+            ("watchlist_items", "last_episode_season", "INTEGER"),
+            ("watchlist_items", "last_episode_number", "INTEGER"),
+            ("watchlist_items", "last_episode_name", "TEXT"),
+            ("watchlist_items", "last_episode_still", "TEXT"),
+            ("watchlist_items", "air_status", "TEXT"),
+            ("watchlist_items", "last_air_check", "DATETIME"),
         ]
         
         for table, col, dtype in columns_to_add:

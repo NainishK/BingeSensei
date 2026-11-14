@@ -193,3 +193,36 @@ def discover_media(media_type: str, with_genres: str = None, sort_by: str = "pop
             print(f"Error discovering media: {e}")
             break
     return {"results": []}
+
+def get_tv_release_data(tmdb_id: int):
+    """
+    Fetch comprehensive release and episode status for a TV show.
+    Returns parsed last/next air info, total counts, and production status.
+    """
+    data = get_details("tv", tmdb_id)
+    if not data or "id" not in data:
+        return None
+    
+    last_ep = data.get("last_episode_to_air") or {}
+    next_ep = data.get("next_episode_to_air") or {}
+    
+    return {
+        "status": data.get("status"), # "Returning Series", "Ended", "Canceled"
+        "total_seasons": data.get("number_of_seasons", 0),
+        "total_episodes": data.get("number_of_episodes", 0),
+        "poster_path": data.get("poster_path"),
+        "backdrop_path": data.get("backdrop_path"),
+        "last_air_date": last_ep.get("air_date"),
+        "last_episode_season": last_ep.get("season_number"),
+        "last_episode_number": last_ep.get("episode_number"),
+        "last_episode_name": last_ep.get("name"),
+        "last_episode_still": last_ep.get("still_path"),
+        "last_episode_overview": last_ep.get("overview"),
+        "next_air_date": next_ep.get("air_date"),
+        "next_episode_season": next_ep.get("season_number"),
+        "next_episode_number": next_ep.get("episode_number"),
+        "next_episode_name": next_ep.get("name"),
+        "next_episode_still": next_ep.get("still_path"),
+        "next_episode_overview": next_ep.get("overview"),
+    }
+

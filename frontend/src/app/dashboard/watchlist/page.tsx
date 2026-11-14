@@ -13,6 +13,7 @@ import { STATUS_COLORS, ALL_TAB_CONFIG } from '@/lib/statusColors';
 import GenreFilter from './GenreFilter';
 import CustomSelect from '@/components/CustomSelect';
 import { WatchlistSkeleton } from '@/components/SkeletonLoader';
+import ReleaseReel from '@/components/ReleaseReel';
 
 export default function WatchlistPage() {
     const router = useRouter();
@@ -383,6 +384,9 @@ export default function WatchlistPage() {
                     </button>
                 </div>
             </div>
+
+            {/* Release Radar Story Reel */}
+            <ReleaseReel onWatchlistUpdated={fetchWatchlist} />
 
             {/* Navigation Tabs */}
             {/* Navigation Tabs (Desktop) & Dropdown (Mobile) */}

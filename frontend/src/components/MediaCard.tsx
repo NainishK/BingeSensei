@@ -28,6 +28,14 @@ export interface MediaItem {
     current_episode?: number;
     original_language?: string;
     notes?: string;
+    is_followed?: boolean;
+    air_status?: string;
+    last_air_date?: string;
+    next_air_date?: string;
+    last_episode_season?: number;
+    last_episode_number?: number;
+    next_episode_season?: number;
+    next_episode_number?: number;
 }
 
 interface MediaCardProps {
@@ -64,6 +72,7 @@ export default function MediaCard({
     const [error, setError] = useState('');
     const [showRatingPopover, setShowRatingPopover] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [isFollowed, setIsFollowed] = useState(Boolean(item.is_followed));
     
     // Defensive check: robustly parse genre_ids in case they are returned as string or serialized array
     const parsedGenreIds = (() => {
@@ -108,8 +117,9 @@ export default function MediaCard({
         setUserRating(item.user_rating || 0);
         setDbId(item.dbId);
         setNotes(item.notes || "");
+        setIsFollowed(Boolean(item.is_followed));
         setProgress({ season: item.current_season || 0, episode: item.current_episode || 0 });
-    }, [existingStatus, item.user_rating, item.dbId, item.current_season, item.current_episode, item.notes]);
+    }, [existingStatus, item.user_rating, item.dbId, item.current_season, item.current_episode, item.notes, item.is_followed]);
 
     const [progress, setProgress] = useState({
         season: item.current_season || 0,
@@ -139,6 +149,19 @@ export default function MediaCard({
         } catch (e) {
             console.error("Notes update failed", e);
             // Optionally revert: setNotes(notes) if we passed oldNotes down
+        }
+    };
+
+    const handleToggleFollow = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!dbId) return;
+        const nextVal = !isFollowed;
+        setIsFollowed(nextVal);
+        try {
+            await api.patch(`/watchlist/${dbId}/follow`, { is_followed: nextVal });
+        } catch (err) {
+            console.error("Failed to toggle follow", err);
+            setIsFollowed(!nextVal); // Revert
         }
     };
 
@@ -433,6 +456,16 @@ export default function MediaCard({
                             />
                         </div>
 
+                        {dbId && item.media_type === 'tv' && (
+                            <button
+                                onClick={handleToggleFollow}
+                                className={`${styles.actionBtn} ${isFollowed ? styles.btnFollowActive : styles.btnFollowInactive}`}
+                                title={isFollowed ? "Tracking releases (Radar ON)" : "Follow for release drops (Radar OFF)"}
+                            >
+                                <Zap size={15} className={isFollowed ? styles.zapActive : ''} />
+                            </button>
+                        )}
+
                         {onRemove ? (
                             <button
                                 onClick={onRemove}
@@ -476,6 +509,8 @@ export default function MediaCard({
                 onProgressChange={(dbId && status !== 'plan_to_watch') ? handleProgressChange : undefined}
                 notes={notes}
                 onNotesChange={dbId ? handleNotesChange : undefined}
+                isFollowed={isFollowed}
+                onToggleFollow={dbId && item.media_type === 'tv' ? () => handleToggleFollow({ stopPropagation: () => {} } as any) : undefined}
             />
         </>
     );

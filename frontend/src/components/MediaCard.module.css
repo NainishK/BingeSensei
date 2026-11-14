@@ -275,6 +275,37 @@
     color: #dc2626;
 }
 
+.btnFollowActive {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.btnFollowActive:hover {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+}
+
+.btnFollowInactive {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--muted-foreground);
+    border: 1px solid var(--border);
+}
+
+.btnFollowInactive:hover {
+    background: rgba(245, 158, 11, 0.08);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.3);
+    transform: translateY(-1px);
+}
+
+.zapActive {
+    fill: #f59e0b;
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.5));
+}
+
 .toggleBtn {
     background: none;
     border: none;
