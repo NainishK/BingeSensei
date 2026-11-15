@@ -9,13 +9,14 @@ import {
     ChevronRight,
     RotateCcw,
     Layers,
-    ListFilter,
+    List,
     Zap,
     Tv,
     Play,
     ExternalLink,
     Sparkles,
-    Check
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react';
 import { ActivityDrop } from '@/components/ReleaseReel';
 
@@ -53,6 +54,7 @@ const SERVICE_COLORS: Record<string, string> = {
     'prime video': '#06b6d4',
     'paramount+': '#2563eb',
     'peacock': '#f59e0b',
+    'crunchyroll': '#f97316'
 };
 
 const getServiceColor = (name: string): string => {
@@ -67,9 +69,9 @@ export default function CalendarPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [data, setData] = useState<CalendarResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState<'runway' | 'grid'>('runway');
-    const [preference, setPreference] = useState<'weekly' | 'binge'>('weekly');
+    const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
     const [followedOnly, setFollowedOnly] = useState(false);
+    const [showScorecards, setShowScorecards] = useState(false);
     const [selectedDrop, setSelectedDrop] = useState<ActivityDrop | null>(null);
     const [syncing, setSyncing] = useState(false);
 
@@ -101,6 +103,10 @@ export default function CalendarPage() {
         setCurrentDate(new Date(year, month, 1));
     };
 
+    const handleToday = () => {
+        setCurrentDate(new Date());
+    };
+
     const handleSync = async () => {
         setSyncing(true);
         try {
@@ -116,6 +122,7 @@ export default function CalendarPage() {
     };
 
     const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const todayStr = new Date().toISOString().split('T')[0];
 
     // Filter events if followedOnly is active
     const filteredEvents = (data?.events || []).map((evt) => ({
@@ -126,11 +133,68 @@ export default function CalendarPage() {
     // Heatmap bar total calculation
     const totalDropsInMonth = Object.values(data?.service_distribution || {}).reduce((a, b) => a + b, 0);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    // Build days matrix for Monthly Grid
-    const daysInMonth = new Date(year, month, 0).getDate();
+    // ========================================================
+    // Build Complete 35 or 42 Cell Month Matrix
+    // ========================================================
     const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Sun
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+
+    interface GridCellData {
+        dayNum: number;
+        dateStr: string;
+        isCurrentMonth: boolean;
+        isToday: boolean;
+        drops: ActivityDrop[];
+    }
+
+    const gridCells: GridCellData[] = [];
+
+    // 1. Previous month trailing days
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const d = daysInPrevMonth - i;
+        const prevMonthNum = month === 1 ? 12 : month - 1;
+        const prevYear = month === 1 ? year - 1 : year;
+        const dStr = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        gridCells.push({
+            dayNum: d,
+            dateStr: dStr,
+            isCurrentMonth: false,
+            isToday: dStr === todayStr,
+            drops: []
+        });
+    }
+
+    // 2. Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayDrops = (filteredEvents.find((e) => e.date === dStr)?.drops) || [];
+        gridCells.push({
+            dayNum: d,
+            dateStr: dStr,
+            isCurrentMonth: true,
+            isToday: dStr === todayStr,
+            drops: dayDrops
+        });
+    }
+
+    // 3. Next month leading days to complete full 35 or 42 grid
+    const totalCells = gridCells.length > 35 ? 42 : 35;
+    const remainingCells = totalCells - gridCells.length;
+    for (let d = 1; d <= remainingCells; d++) {
+        const nextMonthNum = month === 12 ? 1 : month + 1;
+        const nextYear = month === 12 ? year + 1 : year;
+        const dStr = `${nextYear}-${String(nextMonthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        gridCells.push({
+            dayNum: d,
+            dateStr: dStr,
+            isCurrentMonth: false,
+            isToday: dStr === todayStr,
+            drops: []
+        });
+    }
+
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
         <div className={styles.pageContainer}>
@@ -138,11 +202,11 @@ export default function CalendarPage() {
             <div className={styles.header}>
                 <div className={styles.titleArea}>
                     <h1>
-                        <Zap className={styles.radarIcon} size={28} />
-                        Release Calendar & Radar
+                        <CalendarIcon className={styles.radarIcon} size={28} />
+                        Release Calendar
                     </h1>
                     <p className={styles.subtitle}>
-                        Plan upcoming drops, optimize your subscription timing, and avoid paying for idle services.
+                        Track TV season drops, episode air dates, and streaming subscription availability.
                     </p>
                 </div>
 
@@ -156,70 +220,75 @@ export default function CalendarPage() {
                         <button className={styles.monthBtn} onClick={handleNextMonth} title="Next Month">
                             <ChevronRight size={18} />
                         </button>
+                        <button className={styles.todayBtn} onClick={handleToday} title="Go to current month">
+                            Today
+                        </button>
                     </div>
 
-                    {/* View Switcher */}
+                    {/* View Switcher: Month Grid vs Agenda List */}
                     <div className={styles.viewToggle}>
                         <button
-                            className={`${styles.toggleBtn} ${viewMode === 'runway' ? styles.toggleBtnActive : ''}`}
-                            onClick={() => setViewMode('runway')}
+                            className={`${styles.toggleBtn} ${viewMode === 'month' ? styles.toggleBtnActive : ''}`}
+                            onClick={() => setViewMode('month')}
+                            title="Month Calendar Grid"
                         >
-                            <Layers size={14} /> Runway
+                            <CalendarIcon size={14} /> Month
                         </button>
                         <button
-                            className={`${styles.toggleBtn} ${viewMode === 'grid' ? styles.toggleBtnActive : ''}`}
-                            onClick={() => setViewMode('grid')}
+                            className={`${styles.toggleBtn} ${viewMode === 'agenda' ? styles.toggleBtnActive : ''}`}
+                            onClick={() => setViewMode('agenda')}
+                            title="Compact Agenda Timeline"
                         >
-                            <CalendarIcon size={14} /> Grid
+                            <List size={14} /> Agenda
                         </button>
                     </div>
 
-                    {/* Followed Only Filter */}
+                    {/* Followed Only Toggle Filter */}
                     <button
                         className={`${styles.toggleBtn} ${followedOnly ? styles.toggleBtnActive : ''}`}
                         onClick={() => setFollowedOnly(!followedOnly)}
-                        style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '8px 12px' }}
+                        style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '7px 12px' }}
                     >
                         <Zap size={13} fill={followedOnly ? '#f59e0b' : 'none'} color={followedOnly ? '#f59e0b' : 'currentColor'} />
                         {followedOnly ? 'Followed Only' : 'All Watchlist'}
                     </button>
 
                     {/* Sync Button */}
-                    <button className={styles.syncBtn} onClick={handleSync} disabled={syncing}>
+                    <button className={styles.syncBtn} onClick={handleSync} disabled={syncing} title="Refresh Release Data from TMDB">
                         <RotateCcw size={14} className={syncing ? 'animate-spin' : ''} />
                         {syncing ? 'Syncing...' : 'Sync Radar'}
                     </button>
                 </div>
             </div>
 
-            {/* Subscription Heatmap Section */}
-            <div className={styles.heatmapSection}>
-                <div className={styles.heatmapHeader}>
-                    <h3 className={styles.heatmapTitle}>
-                        <Sparkles size={18} color="#f59e0b" />
-                        Subscription Heatmap — {monthName}
-                    </h3>
-
-                    <div className={styles.prefToggle}>
-                        <span>Viewing Strategy:</span>
-                        <button
-                            className={`${styles.prefPill} ${preference === 'weekly' ? styles.prefPillActive : ''}`}
-                            onClick={() => setPreference('weekly')}
-                        >
-                            Weekly Releases
-                        </button>
-                        <button
-                            className={`${styles.prefPill} ${preference === 'binge' ? styles.prefPillActive : ''}`}
-                            onClick={() => setPreference('binge')}
-                            title="Calculate based on Season Finale dates"
-                        >
-                            Binge Window
-                        </button>
+            {/* Compact Subscription Heatmap Strip */}
+            <div className={styles.heatmapStrip}>
+                <div className={styles.heatmapTopRow}>
+                    <div className={styles.heatmapSummary}>
+                        <Sparkles size={16} color="#f59e0b" />
+                        <span>
+                            {totalDropsInMonth > 0
+                                ? `${totalDropsInMonth} drops scheduled across ${Object.keys(data?.service_distribution || {}).length} services in ${monthName}`
+                                : `No drops scheduled on your tracked shows for ${monthName}`}
+                        </span>
                     </div>
+
+                    {data?.value_scorecard && data.value_scorecard.length > 0 && (
+                        <button
+                            className={styles.insightsToggleBtn}
+                            onClick={() => setShowScorecards(!showScorecards)}
+                        >
+                            {showScorecards ? (
+                                <>Hide Spending Insights <ChevronUp size={14} /></>
+                            ) : (
+                                <>Spending & Value Insights ({data.value_scorecard.length}) <ChevronDown size={14} /></>
+                            )}
+                        </button>
+                    )}
                 </div>
 
-                {/* Multi-colored Heatmap Bar */}
-                {totalDropsInMonth > 0 ? (
+                {/* Heatmap Bar */}
+                {totalDropsInMonth > 0 && (
                     <>
                         <div className={styles.heatmapBar}>
                             {Object.entries(data?.service_distribution || {}).map(([service, count]) => {
@@ -239,29 +308,27 @@ export default function CalendarPage() {
                         </div>
 
                         {/* Legend */}
-                        <div className={styles.heatmapLegend}>
-                            {Object.entries(data?.service_distribution || {}).map(([service, count]) => (
-                                <div key={service} className={styles.legendItem}>
-                                    <span
-                                        className={styles.legendDot}
-                                        style={{ backgroundColor: getServiceColor(service) }}
-                                    />
-                                    <span>
-                                        <strong>{service}</strong> ({count} {count === 1 ? 'drop' : 'drops'})
-                                    </span>
-                                </div>
-                            ))}
+                        <div className={styles.heatmapLegendRow}>
+                            <div className={styles.heatmapLegend}>
+                                {Object.entries(data?.service_distribution || {}).map(([service, count]) => (
+                                    <div key={service} className={styles.legendItem}>
+                                        <span
+                                            className={styles.legendDot}
+                                            style={{ backgroundColor: getServiceColor(service) }}
+                                        />
+                                        <span>
+                                            <strong>{service}</strong>: {count} {count === 1 ? 'drop' : 'drops'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </>
-                ) : (
-                    <p style={{ fontSize: '0.85rem', color: '#a1a1aa', margin: '0 0 1rem' }}>
-                        No drops scheduled on your tracked shows for this month.
-                    </p>
                 )}
 
-                {/* Value Scorecard */}
-                {data?.value_scorecard && data.value_scorecard.length > 0 && (
-                    <div className={styles.scorecardGrid}>
+                {/* Collapsible Scorecard Drawer */}
+                {showScorecards && data?.value_scorecard && (
+                    <div className={styles.scorecardDrawer}>
                         {data.value_scorecard.map((item) => {
                             const badgeClass =
                                 item.value_label === 'High Value'
@@ -291,15 +358,97 @@ export default function CalendarPage() {
                 )}
             </div>
 
-            {/* Runway Timeline View */}
-            {viewMode === 'runway' ? (
-                <div className={styles.runwayContainer}>
+            {/* ======================================================== */}
+            {/* VIEW MODE: AUTHENTIC MONTHLY CALENDAR GRID (DEFAULT)     */}
+            {/* ======================================================== */}
+            {viewMode === 'month' ? (
+                <div className={styles.calendarContainer}>
+                    {/* Weekday Labels (Sun, Mon, Tue...) */}
+                    <div className={styles.weekHeaderRow}>
+                        {weekDays.map((day, idx) => (
+                            <div
+                                key={day}
+                                className={`${styles.weekHeaderCell} ${idx === 0 || idx === 6 ? styles.weekHeaderCellWeekend : ''}`}
+                            >
+                                {day}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* The 7-Column Day Matrix */}
+                    <div className={styles.calendarMonthGrid}>
+                        {gridCells.map((cell, idx) => (
+                            <div
+                                key={`${cell.dateStr}-${idx}`}
+                                className={`
+                                    ${styles.calendarDayCell}
+                                    ${!cell.isCurrentMonth ? styles.calendarDayCellDimmed : ''}
+                                    ${cell.isToday ? styles.calendarDayCellToday : ''}
+                                `}
+                            >
+                                {/* Date Number Header */}
+                                <div className={styles.cellDateHeader}>
+                                    <span className={styles.cellDayNumber}>{cell.dayNum}</span>
+                                    {cell.isToday && <span className={styles.todayPill}>Today</span>}
+                                    {cell.drops.length > 0 && (
+                                        <span className={styles.dropCountBadge}>
+                                            {cell.drops.length} {cell.drops.length === 1 ? 'drop' : 'drops'}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Episode Drop Cards Stack */}
+                                <div className={styles.cellDropsStack}>
+                                    {cell.drops.map((drop, dropIdx) => (
+                                        <div
+                                            key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
+                                            className={`
+                                                ${styles.gridDropCard}
+                                                ${drop.is_on_active_subscription ? styles.gridDropCardActiveSub : ''}
+                                            `}
+                                            onClick={() => setSelectedDrop(drop)}
+                                            title={`${drop.title} — Season ${drop.season_number} Episode ${drop.episode_number || 1}${
+                                                drop.available_on ? ' on ' + drop.available_on : ''
+                                            }`}
+                                        >
+                                            {drop.poster_path && (
+                                                <img
+                                                    src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
+                                                    alt={drop.title}
+                                                    className={styles.cardMiniPoster}
+                                                    loading="lazy"
+                                                />
+                                            )}
+                                            <div className={styles.cardDetails}>
+                                                <span className={styles.cardShowTitle}>{drop.title}</span>
+                                                <span className={styles.cardEpTag}>
+                                                    S{drop.season_number || 1}
+                                                    {drop.episode_number ? ` · E${drop.episode_number}` : ''}
+                                                </span>
+                                                {drop.available_on && (
+                                                    <span className={styles.cardProviderDot}>
+                                                        ● {drop.available_on}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : (
+                /* ======================================================== */
+                /* VIEW MODE: COMPACT AGENDA LIST                           */
+                /* ======================================================== */
+                <div className={styles.agendaContainer}>
                     {filteredEvents.length > 0 ? (
                         filteredEvents.map((evt) => {
                             const isToday = evt.date === todayStr;
                             const dateObj = new Date(evt.date + 'T00:00:00');
-                            const dayName = dateObj.toLocaleDateString('default', {
-                                weekday: 'short',
+                            const dayFormatted = dateObj.toLocaleDateString('default', {
+                                weekday: 'long',
                                 month: 'short',
                                 day: 'numeric'
                             });
@@ -307,38 +456,37 @@ export default function CalendarPage() {
                             return (
                                 <div
                                     key={evt.date}
-                                    className={`${styles.runwayDayBlock} ${isToday ? styles.runwayDayBlockToday : ''}`}
+                                    className={`${styles.agendaDateBlock} ${isToday ? styles.agendaDateBlockToday : ''}`}
                                 >
-                                    <div className={styles.runwayDateHeader}>
-                                        <span>{dayName}</span>
-                                        {isToday && <span className={styles.todayTag}>Today</span>}
+                                    <div className={styles.agendaDateHeader}>
+                                        <span>{dayFormatted}</span>
+                                        {isToday && <span className={styles.todayPill}>Today</span>}
                                     </div>
 
-                                    <div className={styles.runwayDropsGrid}>
+                                    <div className={styles.agendaCardsRow}>
                                         {evt.drops.map((drop, dropIdx) => (
                                             <div
                                                 key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
-                                                className={styles.runwayCard}
+                                                className={styles.agendaCard}
                                                 onClick={() => setSelectedDrop(drop)}
                                             >
                                                 {drop.poster_path && (
                                                     <img
                                                         src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
                                                         alt={drop.title}
-                                                        className={styles.runwayPoster}
+                                                        className={styles.agendaPoster}
                                                     />
                                                 )}
-                                                <div className={styles.runwayDetails}>
-                                                    <h5 className={styles.runwayShowTitle} title={drop.title}>
+                                                <div className={styles.cardDetails}>
+                                                    <h5 style={{ margin: '0 0 2px', fontSize: '0.9rem', color: '#fff' }}>
                                                         {drop.title}
                                                     </h5>
-                                                    <div className={styles.runwayEpMeta}>
-                                                        Season {drop.season_number || 1}
-                                                        {drop.episode_number ? ` · E${drop.episode_number}` : ''}
+                                                    <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginBottom: 4 }}>
+                                                        Season {drop.season_number || 1} · Episode {drop.episode_number || 1}
+                                                        {drop.episode_name ? `: "${drop.episode_name}"` : ''}
                                                     </div>
                                                     {drop.available_on && (
-                                                        <span className={styles.runwayServiceBadge}>
-                                                            <Tv size={12} />
+                                                        <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
                                                             {drop.available_on}
                                                         </span>
                                                     )}
@@ -350,57 +498,12 @@ export default function CalendarPage() {
                             );
                         })
                     ) : (
-                        <div className={styles.emptyState}>
+                        <div className={styles.emptyCalendar}>
                             <CalendarIcon size={42} className={styles.emptyIcon} />
                             <h3>No releases found for {monthName}</h3>
                             <p>Follow more TV shows or check a different month.</p>
                         </div>
                     )}
-                </div>
-            ) : (
-                /* Monthly Matrix Grid */
-                <div className={styles.monthGrid}>
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                        <div key={d} className={styles.dayNameHeader}>
-                            {d}
-                        </div>
-                    ))}
-
-                    {/* Pre-padding empty days */}
-                    {Array.from({ length: firstDayIndex }).map((_, i) => (
-                        <div key={`empty-${i}`} className={styles.calendarCell} style={{ opacity: 0.3 }} />
-                    ))}
-
-                    {/* Day Cells */}
-                    {Array.from({ length: daysInMonth }).map((_, i) => {
-                        const dayNum = i + 1;
-                        const cellDateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-                        const isToday = cellDateStr === todayStr;
-                        const dayDrops = (filteredEvents.find((e) => e.date === cellDateStr)?.drops) || [];
-
-                        return (
-                            <div
-                                key={cellDateStr}
-                                className={`${styles.calendarCell} ${isToday ? styles.calendarCellToday : ''}`}
-                            >
-                                <span className={`${styles.cellDayNum} ${isToday ? styles.cellDayNumToday : ''}`}>
-                                    {dayNum}
-                                </span>
-
-                                {dayDrops.map((drop, dropIdx) => (
-                                    <div
-                                        key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
-                                        className={`${styles.cellChip} ${drop.is_on_active_subscription ? styles.cellChipActiveSub : ''}`}
-                                        onClick={() => setSelectedDrop(drop)}
-                                        title={`${drop.title} (S${drop.season_number} E${drop.episode_number})`}
-                                    >
-                                        {drop.title} S{drop.season_number}
-                                        {drop.episode_number ? `E${drop.episode_number}` : ''}
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    })}
                 </div>
             )}
 

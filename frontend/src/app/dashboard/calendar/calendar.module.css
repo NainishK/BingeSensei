@@ -1,24 +1,25 @@
 .pageContainer {
-    max-width: 1400px;
+    max-width: 1440px;
     margin: 0 auto;
     padding: 1.5rem 1rem 3rem;
 }
 
+/* Header & Controls */
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     flex-wrap: wrap;
     gap: 1.25rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .titleArea h1 {
-    font-size: 1.85rem;
+    font-size: 1.75rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     color: var(--foreground);
-    margin: 0 0 6px;
+    margin: 0 0 4px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -29,7 +30,7 @@
 }
 
 .subtitle {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     color: var(--muted-foreground);
     margin: 0;
 }
@@ -37,7 +38,7 @@
 .headerControls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
@@ -47,15 +48,16 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 4px;
+    padding: 3px 6px;
+    gap: 4px;
 }
 
 .monthBtn {
     background: transparent;
     border: none;
     color: var(--foreground);
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -68,12 +70,29 @@
     background: var(--accent);
 }
 
-.monthTitle {
-    font-size: 0.92rem;
-    font-weight: 700;
-    padding: 0 12px;
+.todayBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
     color: var(--foreground);
-    min-width: 130px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.todayBtn:hover {
+    background: var(--accent);
+    color: #f59e0b;
+}
+
+.monthTitle {
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 0 8px;
+    color: var(--foreground);
+    min-width: 140px;
     text-align: center;
 }
 
@@ -82,7 +101,8 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 4px;
+    padding: 3px;
+    gap: 2px;
 }
 
 .toggleBtn {
@@ -94,7 +114,7 @@
     color: var(--muted-foreground);
     padding: 6px 12px;
     border-radius: 8px;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -113,9 +133,9 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border);
     color: var(--foreground);
-    padding: 8px 14px;
+    padding: 7px 12px;
     border-radius: 12px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -126,83 +146,62 @@
     transform: translateY(-1px);
 }
 
-/* Subscription Heatmap Section */
-.heatmapSection {
+/* Compact Heatmap Strip */
+.heatmapStrip {
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 2rem;
+    border-radius: 14px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
-.heatmapHeader {
+.heatmapTopRow {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1rem;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
 }
 
-.heatmapTitle {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--foreground);
-    margin: 0;
+.heatmapSummary {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.prefToggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.8rem;
-    color: var(--muted-foreground);
-}
-
-.prefPill {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border);
-    padding: 4px 10px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     font-weight: 600;
-    color: var(--muted-foreground);
-    transition: all 0.2s;
+    color: var(--foreground);
 }
 
-.prefPillActive {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    border-color: rgba(245, 158, 11, 0.4);
-}
-
-/* Segmented Heatmap Bar */
 .heatmapBar {
     width: 100%;
-    height: 14px;
-    border-radius: 8px;
+    height: 8px;
+    border-radius: 6px;
     overflow: hidden;
     display: flex;
-    background: rgba(255, 255, 255, 0.05);
-    margin-bottom: 1rem;
+    background: rgba(255, 255, 255, 0.06);
+    margin-bottom: 0.65rem;
 }
 
 .heatmapSegment {
     height: 100%;
-    transition: width 0.4s ease;
-    position: relative;
+    transition: width 0.3s ease;
+}
+
+.heatmapLegendRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .heatmapLegend {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
-    font-size: 0.8rem;
+    gap: 0.85rem;
+    font-size: 0.78rem;
     color: var(--muted-foreground);
 }
 
@@ -213,58 +212,85 @@
 }
 
 .legendDot {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
 }
 
-/* Value Scorecard Grid */
-.scorecardGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
-    margin-top: 1.25rem;
-    padding-top: 1.25rem;
+.insightsToggleBtn {
+    background: transparent;
+    border: none;
+    color: #60a5fa;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.insightsToggleBtn:hover {
+    background: rgba(96, 165, 250, 0.1);
+    color: #93c5fd;
+}
+
+/* Collapsible Scorecard Drawer */
+.scorecardDrawer {
+    margin-top: 1rem;
+    padding-top: 1rem;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.85rem;
+    animation: drawerIn 0.25s ease-out;
+}
+
+@keyframes drawerIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .scorecard {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    transition: all 0.2s;
-}
-
-.scorecard:hover {
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    padding: 10px 12px;
 }
 
 .scorecardTop {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .scorecardService {
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: var(--foreground);
 }
 
 .scorecardCost {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--muted-foreground);
 }
 
 .scorecardBadge {
     display: inline-block;
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    padding: 2px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .badgeHigh {
@@ -292,197 +318,299 @@
 }
 
 .scorecardAction {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: var(--muted-foreground);
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
-/* Weekly Runway (Timeline View) */
-.runwayContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
+/* ======================================================== */
+/* 📅 THE CALENDAR GRID (AUTHENTIC MONTH GRID VIEW)          */
+/* ======================================================== */
 
-.runwayDayBlock {
+.calendarContainer {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* Days of the week row (Sun, Mon, Tue...) */
+.weekHeaderRow {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--border);
+}
+
+.weekHeaderCell {
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+}
+
+.weekHeaderCellWeekend {
+    color: #a1a1aa;
+}
+
+/* Grid Matrix */
+.calendarMonthGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-collapse: collapse;
+}
+
+/* Individual Calendar Day Cell */
+.calendarDayCell {
+    min-height: 125px;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.01);
+    transition: background 0.15s ease;
+    position: relative;
+}
+
+/* Remove right border on Saturday (last column) */
+.calendarDayCell:nth-child(7n) {
+    border-right: none;
+}
+
+.calendarDayCell:hover {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.calendarDayCellDimmed {
+    opacity: 0.35;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.calendarDayCellToday {
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.calendarDayCellToday::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px solid #f59e0b;
+    border-radius: 4px;
+    pointer-events: none;
+    box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+/* Date Number at the top of cell */
+.cellDateHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.cellDayNumber {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    line-height: 1;
+}
+
+.todayPill {
+    background: #f59e0b;
+    color: #000;
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dropCountBadge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+/* Cards Stack inside cell */
+.cellDropsStack {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+}
+
+/* Rich Episode Card inside Calendar Day */
+.gridDropCard {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 4px 6px;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 0;
+}
+
+.gridDropCard:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.gridDropCardActiveSub {
+    border-left: 3px solid #10b981;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.cardMiniPoster {
+    width: 24px;
+    height: 36px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #18181b;
+}
+
+.cardDetails {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.cardShowTitle {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.cardEpTag {
+    font-size: 0.64rem;
+    font-weight: 600;
+    color: #a1a1aa;
+    line-height: 1.2;
+    margin-top: 1px;
+}
+
+.cardProviderDot {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6rem;
+    color: #34d399;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ======================================================== */
+/* 📋 AGENDA LIST VIEW (CLEAN COMPACT TIMELINE)             */
+/* ======================================================== */
+
+.agendaContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.agendaDateBlock {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
     padding: 1rem 1.25rem;
 }
 
-.runwayDayBlockToday {
+.agendaDateBlockToday {
     border-color: rgba(245, 158, 11, 0.4);
     background: rgba(245, 158, 11, 0.03);
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.08);
 }
 
-.runwayDateHeader {
+.agendaDateHeader {
     display: flex;
     align-items: center;
     gap: 8px;
     font-weight: 700;
     font-size: 0.95rem;
     color: var(--foreground);
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
 }
 
-.todayTag {
-    background: #f59e0b;
-    color: #000;
-    font-size: 0.68rem;
-    font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
-    text-transform: uppercase;
-}
-
-.runwayDropsGrid {
+.agendaCardsRow {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
 }
 
-.runwayCard {
+.agendaCard {
     display: flex;
+    align-items: center;
     gap: 12px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 10px;
-    padding: 10px;
+    padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
-.runwayCard:hover {
-    background: rgba(255, 255, 255, 0.07);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+.agendaCard:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
 }
 
-.runwayPoster {
-    width: 50px;
-    height: 75px;
+.agendaPoster {
+    width: 40px;
+    height: 60px;
     border-radius: 6px;
     object-fit: cover;
     flex-shrink: 0;
-    background: #18181b;
 }
 
-.runwayDetails {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-width: 0;
-}
-
-.runwayShowTitle {
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: var(--foreground);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin: 0 0 2px;
-}
-
-.runwayEpMeta {
-    font-size: 0.78rem;
-    color: #a1a1aa;
-    margin: 0 0 6px;
-}
-
-.runwayServiceBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: #34d399;
-}
-
-/* Monthly Grid View */
-.monthGrid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.02);
+.emptyCalendar {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--muted-foreground);
+    background: rgba(255, 255, 255, 0.01);
     border: 1px solid var(--border);
     border-radius: 16px;
-    padding: 12px;
-}
-
-.dayNameHeader {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--muted-foreground);
-    text-align: center;
-    padding: 8px 0;
-    text-transform: uppercase;
-}
-
-.calendarCell {
-    min-height: 105px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 10px;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    transition: all 0.2s;
-}
-
-.calendarCellToday {
-    border-color: rgba(245, 158, 11, 0.5);
-    background: rgba(245, 158, 11, 0.03);
-}
-
-.cellDayNum {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--muted-foreground);
-    margin-bottom: 4px;
-}
-
-.cellDayNumToday {
-    color: #f59e0b;
-}
-
-.cellChip {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 4px 6px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--foreground);
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: all 0.2s;
-}
-
-.cellChip:hover {
-    background: rgba(255, 255, 255, 0.15);
-    transform: scale(1.02);
-}
-
-.cellChipActiveSub {
-    border-color: rgba(16, 185, 129, 0.4);
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
-}
-
-.emptyState {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--muted-foreground);
 }
 
 .emptyIcon {
     margin-bottom: 1rem;
-    opacity: 0.5;
+    opacity: 0.4;
+    color: #f59e0b;
 }
 
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .calendarDayCell {
+        min-height: 95px;
+        padding: 4px;
+    }
+
+    .cardMiniPoster {
+        display: none;
+    }
+
+    .weekHeaderCell {
+        font-size: 0.7rem;
+        padding: 8px 2px;
+    }
+}
