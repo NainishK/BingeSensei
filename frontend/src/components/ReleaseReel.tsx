@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { ServiceIcon } from '@/components/ServiceIcon';
 import styles from './ReleaseReel.module.css';
 import { Zap, Play, X, Calendar, Check, ExternalLink, Sparkles, Tv } from 'lucide-react';
 
@@ -170,10 +171,16 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
                             {drop.available_on && (
                                 <span
                                     className={`${styles.providerPill} ${drop.is_on_active_subscription ? styles.providerActive : ''}`}
-                                    title={drop.available_on}
+                                    title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
                                 >
-                                    {drop.is_on_active_subscription ? '● ' : ''}
-                                    {drop.available_on}
+                                    <ServiceIcon
+                                        name={drop.available_on}
+                                        style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
+                                    />
+                                    <span className={styles.providerNameText}>{drop.available_on}</span>
+                                    {drop.is_on_active_subscription && (
+                                        <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} />
+                                    )}
                                 </span>
                             )}
                         </div>
@@ -239,7 +246,10 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
                                             selectedDrop.is_on_active_subscription ? styles.modalServiceActive : ''
                                         }`}
                                     >
-                                        <Tv size={13} />
+                                        <ServiceIcon
+                                            name={selectedDrop.available_on}
+                                            style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }}
+                                        />
                                         {selectedDrop.is_on_active_subscription
                                             ? `Streaming on your ${selectedDrop.available_on}`
                                             : `Available on ${selectedDrop.available_on}`}

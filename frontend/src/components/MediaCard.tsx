@@ -49,6 +49,7 @@ interface MediaCardProps {
     customBadgeColor?: string;
     aiReason?: string;
     layout?: 'grid' | 'list';
+    onFollowChange?: (isFollowed: boolean) => void;
 }
 
 export default function MediaCard({
@@ -61,7 +62,8 @@ export default function MediaCard({
     hideOverview,
     customBadgeColor,
     aiReason,
-    layout = 'grid'
+    layout = 'grid',
+    onFollowChange
 }: MediaCardProps) {
     const [status, setStatus] = useState(existingStatus || 'plan_to_watch');
     const [userRating, setUserRating] = useState(item.user_rating || 0);
@@ -157,11 +159,13 @@ export default function MediaCard({
         if (!dbId) return;
         const nextVal = !isFollowed;
         setIsFollowed(nextVal);
+        onFollowChange?.(nextVal);
         try {
             await api.patch(`/watchlist/${dbId}/follow`, { is_followed: nextVal });
         } catch (err) {
             console.error("Failed to toggle follow", err);
             setIsFollowed(!nextVal); // Revert
+            onFollowChange?.(!nextVal);
         }
     };
 

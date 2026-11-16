@@ -110,6 +110,7 @@ def get_user_radar_settings(user: models.User) -> schemas.UserRadarSettings:
 @router.get("/activity/drops", response_model=schemas.ActivityFeedResponse)
 def get_activity_drops(
     background_tasks: BackgroundTasks,
+    country: str = Query(None, description="Country filter"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -120,9 +121,13 @@ def get_activity_drops(
     background_tasks.add_task(sync_user_radar, db, current_user.id, False)
 
     today = date.today()
+    target_country = (country or current_user.country or "US").upper().strip()
+
     active_subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
-        models.Subscription.is_active == True
+        models.Subscription.is_active == True,
+        models.Subscription.country == target_country,
+        (models.Subscription.category == None) | (models.Subscription.category == "OTT")
     ).all()
     active_services = {s.service_name.lower().strip() for s in active_subs}
 
@@ -281,6 +286,7 @@ def get_activity_drops(
 def get_calendar(
     background_tasks: BackgroundTasks,
     month: str = Query(None, description="Month in YYYY-MM format"),
+    country: str = Query(None, description="Country filter"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -289,6 +295,7 @@ def get_calendar(
     """
     background_tasks.add_task(sync_user_radar, db, current_user.id, False)
     today = date.today()
+    target_country = (country or current_user.country or "US").upper().strip()
     if not month:
         target_year = today.year
         target_month = today.month
@@ -311,7 +318,9 @@ def get_calendar(
 
     active_subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
-        models.Subscription.is_active == True
+        models.Subscription.is_active == True,
+        models.Subscription.country == target_country,
+        (models.Subscription.category == None) | (models.Subscription.category == "OTT")
     ).all()
     active_services = {s.service_name.lower().strip(): s for s in active_subs}
 
@@ -401,26 +410,42 @@ def get_calendar(
 
     # Calculate Value Scorecard for active subscriptions
     value_scorecard: list[schemas.ValueScorecardItem] = []
+    seen_services = set()
     for sub in active_subs:
+        s_norm = sub.service_name.lower().strip()
+        if s_norm in seen_services:
+            continue
+        seen_services.add(s_norm)
         drops_cnt = service_drops_count.get(sub.service_name, 0)
+        cycle = (sub.billing_cycle or "monthly").lower().strip()
+        is_yearly = cycle in ("yearly", "annual")
+        monthly_equiv = sub.cost / 12.0 if is_yearly else sub.cost
+
         if drops_cnt >= 5:
             label = "High Value"
-            action = "Keep Active — Great content drop volume this month."
+            action = "Keep Active: Great content drop volume this month."
         elif drops_cnt >= 2:
             label = "Moderate Value"
-            action = "Keep Active — Steady weekly releases."
+            action = "Keep Active: Steady weekly releases."
         elif drops_cnt == 1:
             label = "Low Value"
-            action = "Consider Binge Window: pause now & binge when season concludes."
+            if is_yearly:
+                action = f"Annual plan active: Light drop schedule this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+            else:
+                action = "Consider Binge Window: pause now & binge when season concludes."
         else:
             label = "Idle / Safe to Pause"
-            action = f"Safe to pause and save {sub.cost:.2f} {sub.currency}."
+            if is_yearly:
+                action = f"Annual plan active: 0 drops scheduled this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+            else:
+                action = f"Safe to pause and save {sub.cost:.2f} {sub.currency}/mo."
 
         value_scorecard.append(schemas.ValueScorecardItem(
             id=sub.id,
             service_name=sub.service_name,
             cost=sub.cost,
             currency=sub.currency,
+            billing_cycle=cycle,
             drop_count=drops_cnt,
             value_label=label,
             suggested_action=action

@@ -178,10 +178,6 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
     # Store genres as JSON string
     genre_ids_str = json.dumps(genre_ids_list) if genre_ids_list else None
     
-    # Auto-follow on initial add if status is watching
-    if item_data.get("media_type") == "tv" and item_data.get("status") == "watching":
-        item_data["is_followed"] = True
-
     db_item = models.WatchlistItem(**item_data, genre_ids=genre_ids_str, user_id=user_id)
     db.add(db_item)
     db.commit()
@@ -337,11 +333,8 @@ def update_watchlist_item_status(db: Session, item_id: int, user_id: int, status
     ).first()
     if db_item:
         db_item.status = status
-        # Auto-follow if moved to 'watching'
-        if status == "watching" and db_item.media_type == "tv":
-            db_item.is_followed = True
         # If marked watched, sync current_season to total_seasons if it was 0
-        elif status == "watched" and db_item.media_type == "tv":
+        if status == "watched" and db_item.media_type == "tv":
             if (db_item.current_season or 0) == 0 and (db_item.total_seasons or 0) > 0:
                 db_item.current_season = db_item.total_seasons
         db.commit()

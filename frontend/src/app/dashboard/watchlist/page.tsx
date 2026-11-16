@@ -181,7 +181,8 @@ export default function WatchlistPage() {
                 current_season: item.current_season,
                 current_episode: item.current_episode,
                 original_language: item.original_language,
-                notes: item.notes
+                notes: item.notes,
+                is_followed: Boolean(item.is_followed)
             }));
 
             setItems(transformed);
@@ -228,6 +229,21 @@ export default function WatchlistPage() {
             }
             return item;
         }));
+    };
+
+    const handleFollowUpdate = (dbId: number, isFollowed: boolean) => {
+        setItems(prev => {
+            const updated = prev.map(item =>
+                item.dbId === dbId ? { ...item, is_followed: isFollowed } : item
+            );
+            try {
+                localStorage.setItem('binge_watchlist_cache', JSON.stringify({
+                    items: updated,
+                    timestamp: Date.now()
+                }));
+            } catch (e) { /* ignore */ }
+            return updated;
+        });
     };
 
     const toggleSortOrder = () => {
@@ -619,6 +635,7 @@ export default function WatchlistPage() {
                                     layout={viewMode}
                                     onRemove={() => confirmRemove(item)}
                                     onStatusChange={(s, r) => handleStatusUpdate(item.dbId!, s, r)}
+                                    onFollowChange={(val) => handleFollowUpdate(item.dbId!, val)}
                                 />
                             </div>
                         ))}

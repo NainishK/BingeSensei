@@ -141,6 +141,7 @@ class ValueScorecardItem(BaseModel):
     service_name: str
     cost: float
     currency: str
+    billing_cycle: str = "monthly"
     drop_count: int
     value_label: str # "High Value", "Moderate Value", "Low Value", "Idle / Safe to Pause"
     suggested_action: str

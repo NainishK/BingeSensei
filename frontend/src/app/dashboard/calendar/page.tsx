@@ -8,7 +8,6 @@ import {
     ChevronLeft,
     ChevronRight,
     RotateCcw,
-    Layers,
     List,
     Zap,
     Tv,
@@ -16,15 +15,19 @@ import {
     ExternalLink,
     Sparkles,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Check,
+    X
 } from 'lucide-react';
 import { ActivityDrop } from '@/components/ReleaseReel';
+import { ServiceIcon } from '@/components/ServiceIcon';
 
 interface ValueScorecardItem {
     id: number;
     service_name: string;
     cost: number;
     currency: string;
+    billing_cycle?: string;
     drop_count: number;
     value_label: string;
     suggested_action: string;
@@ -73,16 +76,57 @@ export default function CalendarPage() {
     const [followedOnly, setFollowedOnly] = useState(false);
     const [showScorecards, setShowScorecards] = useState(false);
     const [selectedDrop, setSelectedDrop] = useState<ActivityDrop | null>(null);
+    const [selectedDay, setSelectedDay] = useState<{ dateStr: string; dateFormatted: string; drops: ActivityDrop[] } | null>(null);
+    const [userCountry, setUserCountry] = useState<string>('');
     const [syncing, setSyncing] = useState(false);
+    const [shouldScrollToToday, setShouldScrollToToday] = useState(false);
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-    const fetchCalendar = async () => {
+    const scrollToTodayElement = () => {
+        let target = document.getElementById(viewMode === 'agenda' ? 'agenda-today' : 'calendar-today');
+
+        // If in agenda view and today has no drops, locate the closest upcoming date
+        if (!target && viewMode === 'agenda') {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const blocks = document.querySelectorAll('[data-agenda-date]');
+            for (let i = 0; i < blocks.length; i++) {
+                const bDate = blocks[i].getAttribute('data-agenda-date');
+                if (bDate && bDate >= todayStr) {
+                    target = blocks[i] as HTMLElement;
+                    break;
+                }
+            }
+            if (!target && blocks.length > 0) {
+                target = blocks[blocks.length - 1] as HTMLElement;
+            }
+        }
+
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add(styles.pulseHighlight);
+            setTimeout(() => {
+                target?.classList.remove(styles.pulseHighlight);
+            }, 1500);
+        }
+    };
+
+    const fetchCalendar = async (countryOverride?: string) => {
         setLoading(true);
         try {
-            const res = await api.get(`/watchlist/calendar?month=${monthStr}`);
+            let activeCountry = countryOverride || userCountry;
+            if (!activeCountry) {
+                try {
+                    const profileRes = await api.get('/users/me/');
+                    activeCountry = profileRes.data.country || 'IN';
+                    setUserCountry(activeCountry);
+                } catch {
+                    activeCountry = 'IN';
+                }
+            }
+            const res = await api.get(`/watchlist/calendar?month=${monthStr}&country=${activeCountry}`);
             setData(res.data);
         } catch (err) {
             console.error('Failed to fetch calendar:', err);
@@ -93,7 +137,19 @@ export default function CalendarPage() {
 
     useEffect(() => {
         fetchCalendar();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [monthStr]);
+
+    useEffect(() => {
+        if (shouldScrollToToday && !loading && data) {
+            const timer = setTimeout(() => {
+                scrollToTodayElement();
+                setShouldScrollToToday(false);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data, loading, shouldScrollToToday]);
 
     const handlePrevMonth = () => {
         setCurrentDate(new Date(year, month - 2, 1));
@@ -104,7 +160,14 @@ export default function CalendarPage() {
     };
 
     const handleToday = () => {
-        setCurrentDate(new Date());
+        const today = new Date();
+        const isSameMonth = today.getFullYear() === year && (today.getMonth() + 1) === month;
+        if (isSameMonth) {
+            scrollToTodayElement();
+        } else {
+            setShouldScrollToToday(true);
+            setCurrentDate(today);
+        }
     };
 
     const handleSync = async () => {
@@ -312,15 +375,25 @@ export default function CalendarPage() {
                             <div className={styles.heatmapLegend}>
                                 {Object.entries(data?.service_distribution || {}).map(([service, count]) => (
                                     <div key={service} className={styles.legendItem}>
-                                        <span
-                                            className={styles.legendDot}
-                                            style={{ backgroundColor: getServiceColor(service) }}
+                                        <ServiceIcon
+                                            name={service}
+                                            style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover' }}
                                         />
                                         <span>
                                             <strong>{service}</strong>: {count} {count === 1 ? 'drop' : 'drops'}
                                         </span>
                                     </div>
                                 ))}
+                            </div>
+
+                            <div className={styles.legendRightGroup}>
+                                <div
+                                    className={styles.legendActiveSubPill}
+                                    title="Cards with a green left border are streaming on services you actively subscribe to"
+                                >
+                                    <span className={styles.legendActiveSubDot} />
+                                    <span>Streaming on Active Sub</span>
+                                </div>
                             </div>
                         </div>
                     </>
@@ -342,10 +415,21 @@ export default function CalendarPage() {
                             return (
                                 <div key={`${item.id}-${item.service_name}`} className={styles.scorecard}>
                                     <div className={styles.scorecardTop}>
-                                        <span className={styles.scorecardService}>{item.service_name}</span>
-                                        <span className={styles.scorecardCost}>
-                                            {item.cost.toFixed(2)} {item.currency}/mo
-                                        </span>
+                                        <div className={styles.scorecardServiceGroup}>
+                                            <ServiceIcon
+                                                name={item.service_name}
+                                                style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }}
+                                            />
+                                            <span className={styles.scorecardService}>{item.service_name}</span>
+                                        </div>
+                                        {(() => {
+                                            const isYearly = item.billing_cycle?.toLowerCase() === 'yearly' || item.billing_cycle?.toLowerCase() === 'annual';
+                                            return (
+                                                <span className={styles.scorecardCost}>
+                                                    {item.cost.toFixed(2)} {item.currency}{isYearly ? '/yr' : '/mo'}
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                     <span className={`${styles.scorecardBadge} ${badgeClass}`}>
                                         {item.drop_count} drops · {item.value_label}
@@ -380,6 +464,7 @@ export default function CalendarPage() {
                         {gridCells.map((cell, idx) => (
                             <div
                                 key={`${cell.dateStr}-${idx}`}
+                                id={cell.isToday ? 'calendar-today' : undefined}
                                 className={`
                                     ${styles.calendarDayCell}
                                     ${!cell.isCurrentMonth ? styles.calendarDayCellDimmed : ''}
@@ -387,7 +472,26 @@ export default function CalendarPage() {
                                 `}
                             >
                                 {/* Date Number Header */}
-                                <div className={styles.cellDateHeader}>
+                                <div
+                                    className={styles.cellDateHeader}
+                                    onClick={() => {
+                                        if (cell.drops.length > 0) {
+                                            const dObj = new Date(cell.dateStr + 'T00:00:00');
+                                            setSelectedDay({
+                                                dateStr: cell.dateStr,
+                                                dateFormatted: dObj.toLocaleDateString('default', {
+                                                    weekday: 'long',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                }),
+                                                drops: cell.drops
+                                            });
+                                        }
+                                    }}
+                                    style={{ cursor: cell.drops.length > 0 ? 'pointer' : 'default' }}
+                                    title={cell.drops.length > 0 ? `Click to view all ${cell.drops.length} drops` : undefined}
+                                >
                                     <span className={styles.cellDayNumber}>{cell.dayNum}</span>
                                     {cell.isToday && <span className={styles.todayPill}>Today</span>}
                                     {cell.drops.length > 0 && (
@@ -397,9 +501,9 @@ export default function CalendarPage() {
                                     )}
                                 </div>
 
-                                {/* Episode Drop Cards Stack */}
+                                {/* Episode Drop Cards Stack (Max 2 cards visible to keep grid perfectly balanced) */}
                                 <div className={styles.cellDropsStack}>
-                                    {cell.drops.map((drop, dropIdx) => (
+                                    {cell.drops.slice(0, 2).map((drop, dropIdx) => (
                                         <div
                                             key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
                                             className={`
@@ -407,17 +511,22 @@ export default function CalendarPage() {
                                                 ${drop.is_on_active_subscription ? styles.gridDropCardActiveSub : ''}
                                             `}
                                             onClick={() => setSelectedDrop(drop)}
-                                            title={`${drop.title} — Season ${drop.season_number} Episode ${drop.episode_number || 1}${
+                                            title={`${drop.title} · Season ${drop.season_number} Episode ${drop.episode_number || 1}${
                                                 drop.available_on ? ' on ' + drop.available_on : ''
-                                            }`}
+                                            }${drop.is_on_active_subscription ? ' (Included in your active subscription)' : ''}`}
                                         >
-                                            {drop.poster_path && (
+                                            {drop.poster_path ? (
+                                                /* eslint-disable-next-line @next/next/no-img-element */
                                                 <img
                                                     src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
                                                     alt={drop.title}
                                                     className={styles.cardMiniPoster}
                                                     loading="lazy"
                                                 />
+                                            ) : (
+                                                <div className={styles.cardMiniPosterPlaceholder}>
+                                                    <Tv size={13} color="#71717a" />
+                                                </div>
                                             )}
                                             <div className={styles.cardDetails}>
                                                 <span className={styles.cardShowTitle}>{drop.title}</span>
@@ -425,15 +534,93 @@ export default function CalendarPage() {
                                                     S{drop.season_number || 1}
                                                     {drop.episode_number ? ` · E${drop.episode_number}` : ''}
                                                 </span>
-                                                {drop.available_on && (
-                                                    <span className={styles.cardProviderDot}>
-                                                        ● {drop.available_on}
-                                                    </span>
-                                                )}
+                                                <div className={styles.cardProviderRow}>
+                                                    {drop.available_on ? (
+                                                        <span
+                                                            className={drop.is_on_active_subscription ? styles.cardProviderActive : styles.cardProviderNeutral}
+                                                            title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
+                                                        >
+                                                            <ServiceIcon
+                                                                name={drop.available_on}
+                                                                style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
+                                                            />
+                                                            <span className={styles.providerName}>{drop.available_on}</span>
+                                                            {drop.is_on_active_subscription && (
+                                                                <Check size={9} strokeWidth={3} />
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        <span className={styles.cardNoProvider}>Airing TBA</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* +N More Drops Pill */}
+                                    {cell.drops.length > 2 && (
+                                        <button
+                                            className={styles.moreDropsBtn}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const dObj = new Date(cell.dateStr + 'T00:00:00');
+                                                setSelectedDay({
+                                                    dateStr: cell.dateStr,
+                                                    dateFormatted: dObj.toLocaleDateString('default', {
+                                                        weekday: 'long',
+                                                        month: 'long',
+                                                        day: 'numeric',
+                                                        year: 'numeric'
+                                                    }),
+                                                    drops: cell.drops
+                                                });
+                                            }}
+                                            title={`View all ${cell.drops.length} drops for ${cell.dateStr}`}
+                                        >
+                                            +{cell.drops.length - 2} more {cell.drops.length - 2 === 1 ? 'drop' : 'drops'}
+                                        </button>
+                                    )}
                                 </div>
+
+                                {/* Mobile Compact Drop Indicator (visible only on mobile via CSS) */}
+                                {cell.drops.length > 0 && (
+                                    <div
+                                        className={styles.cellMobileIndicator}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const dObj = new Date(cell.dateStr + 'T00:00:00');
+                                            setSelectedDay({
+                                                dateStr: cell.dateStr,
+                                                dateFormatted: dObj.toLocaleDateString('default', {
+                                                    weekday: 'long',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                }),
+                                                drops: cell.drops
+                                            });
+                                        }}
+                                        title={`View all ${cell.drops.length} drops for ${cell.dateStr}`}
+                                    >
+                                        <div
+                                            className={`
+                                                ${styles.mobileDropsPill}
+                                                ${cell.drops.some(d => d.is_on_active_subscription) ? styles.mobileDropsPillActive : ''}
+                                            `}
+                                        >
+                                            <span className={styles.mobileDropsCount}>{cell.drops.length}</span>
+                                            <div className={styles.mobileServiceIconsRow}>
+                                                {Array.from(new Set(cell.drops.map(d => d.available_on).filter(Boolean))).slice(0, 3).map((svc, i) => (
+                                                    <ServiceIcon
+                                                        key={i}
+                                                        name={svc as string}
+                                                        style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0 }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -456,6 +643,8 @@ export default function CalendarPage() {
                             return (
                                 <div
                                     key={evt.date}
+                                    id={isToday ? 'agenda-today' : `agenda-${evt.date}`}
+                                    data-agenda-date={evt.date}
                                     className={`${styles.agendaDateBlock} ${isToday ? styles.agendaDateBlockToday : ''}`}
                                 >
                                     <div className={styles.agendaDateHeader}>
@@ -471,6 +660,7 @@ export default function CalendarPage() {
                                                 onClick={() => setSelectedDrop(drop)}
                                             >
                                                 {drop.poster_path && (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
                                                     <img
                                                         src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
                                                         alt={drop.title}
@@ -478,17 +668,21 @@ export default function CalendarPage() {
                                                     />
                                                 )}
                                                 <div className={styles.cardDetails}>
-                                                    <h5 style={{ margin: '0 0 2px', fontSize: '0.9rem', color: '#fff' }}>
+                                                    <h5 className={styles.agendaShowTitle}>
                                                         {drop.title}
                                                     </h5>
-                                                    <div style={{ fontSize: '0.8rem', color: '#a1a1aa', marginBottom: 4 }}>
+                                                    <div className={styles.agendaEpInfo}>
                                                         Season {drop.season_number || 1} · Episode {drop.episode_number || 1}
                                                         {drop.episode_name ? `: "${drop.episode_name}"` : ''}
                                                     </div>
                                                     {drop.available_on && (
-                                                        <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
-                                                            {drop.available_on}
-                                                        </span>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+                                                            <ServiceIcon
+                                                                name={drop.available_on}
+                                                                style={{ width: 13, height: 13, borderRadius: 2.5, objectFit: 'cover' }}
+                                                            />
+                                                            <span>{drop.available_on}</span>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
@@ -507,108 +701,219 @@ export default function CalendarPage() {
                 </div>
             )}
 
-            {/* Quick Watch Drop Popover Modal */}
+            {/* Cinematic Quick Watch Drop Modal */}
             {selectedDrop && (
                 <div
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.75)',
-                        backdropFilter: 'blur(8px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        padding: '1rem'
-                    }}
+                    className={styles.cinematicModalOverlay}
                     onClick={() => setSelectedDrop(null)}
                 >
                     <div
-                        style={{
-                            background: 'rgba(24,24,27,0.96)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            borderRadius: '16px',
-                            padding: '1.5rem',
-                            maxWidth: '460px',
-                            width: '100%',
-                            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
-                        }}
+                        className={styles.cinematicModal}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h3 style={{ margin: '0 0 6px', fontSize: '1.25rem', color: '#fff' }}>
-                            {selectedDrop.title}
-                        </h3>
-                        <p style={{ margin: '0 0 1rem', color: '#a1a1aa', fontSize: '0.9rem' }}>
-                            Season {selectedDrop.season_number} · Episode {selectedDrop.episode_number || 1}
-                            {selectedDrop.episode_name ? ` ("${selectedDrop.episode_name}")` : ''}
-                        </p>
+                        {/* Circular Close Button */}
+                        <button
+                            className={styles.cinematicCloseBtn}
+                            onClick={() => setSelectedDrop(null)}
+                            title="Close"
+                        >
+                            <X size={16} />
+                        </button>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                            {selectedDrop.available_on && (
-                                <span
-                                    style={{
-                                        fontSize: '0.8rem',
-                                        padding: '4px 8px',
-                                        borderRadius: '6px',
-                                        background: selectedDrop.is_on_active_subscription
-                                            ? 'rgba(16, 185, 129, 0.15)'
-                                            : 'rgba(255, 255, 255, 0.08)',
-                                        color: selectedDrop.is_on_active_subscription ? '#34d399' : '#e4e4e7',
-                                        border: '1px solid currentColor',
-                                        fontWeight: 600
-                                    }}
-                                >
-                                    {selectedDrop.is_on_active_subscription ? 'Streaming on your ' : 'Available on '}
-                                    {selectedDrop.available_on}
-                                </span>
+                        {/* Banner Area with Episode Still or Poster */}
+                        <div className={styles.cinematicBannerArea}>
+                            {selectedDrop.episode_still || selectedDrop.poster_path ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                    src={
+                                        selectedDrop.episode_still
+                                            ? `https://image.tmdb.org/t/p/w780${selectedDrop.episode_still}`
+                                            : `https://image.tmdb.org/t/p/w780${selectedDrop.poster_path}`
+                                    }
+                                    alt={selectedDrop.title}
+                                    className={styles.cinematicBannerImg}
+                                />
+                            ) : (
+                                <div className={styles.cinematicBannerPlaceholder}>
+                                    <Tv size={36} color="#71717a" />
+                                </div>
                             )}
-                            {selectedDrop.air_date && (
-                                <span style={{ fontSize: '0.8rem', color: '#a1a1aa' }}>
-                                    Airs: {selectedDrop.air_date}
-                                </span>
-                            )}
+                            <div className={styles.cinematicBannerGradient} />
                         </div>
 
-                        <div style={{ display: 'flex', gap: 10 }}>
-                            <a
-                                href={`https://www.google.com/search?q=${encodeURIComponent(
-                                    `Watch ${selectedDrop.title} ${
-                                        selectedDrop.available_on ? 'on ' + selectedDrop.available_on : ''
-                                    }`
-                                )}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                    flex: 1,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 6,
-                                    background: '#2563eb',
-                                    color: '#fff',
-                                    padding: '10px',
-                                    borderRadius: '8px',
-                                    fontWeight: 600,
-                                    fontSize: '0.9rem',
-                                    textDecoration: 'none'
-                                }}
-                            >
-                                <Play size={14} fill="currentColor" /> Watch Now <ExternalLink size={12} />
-                            </a>
+                        {/* Modal Body */}
+                        <div className={styles.cinematicBody}>
+                            <div className={styles.cinematicTagsRow}>
+                                <span className={styles.cinematicBadge}>
+                                    Season {selectedDrop.season_number || 1} · Episode {selectedDrop.episode_number || 1}
+                                </span>
+                                {selectedDrop.available_on && (
+                                    <span
+                                        className={`
+                                            ${styles.cinematicBadge}
+                                            ${selectedDrop.is_on_active_subscription ? styles.cinematicBadgeActiveSub : ''}
+                                        `}
+                                    >
+                                        <ServiceIcon
+                                            name={selectedDrop.available_on}
+                                            style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover' }}
+                                        />
+                                        {selectedDrop.is_on_active_subscription
+                                            ? `Streaming on your ${selectedDrop.available_on}`
+                                            : `Available on ${selectedDrop.available_on}`}
+                                    </span>
+                                )}
+                            </div>
+
+                            <h3 className={styles.cinematicShowTitle}>{selectedDrop.title}</h3>
+                            {selectedDrop.episode_name && (
+                                <div className={styles.cinematicEpTitle}>
+                                    &quot;{selectedDrop.episode_name}&quot;
+                                </div>
+                            )}
+
+                            <div className={styles.cinematicMetaInfo}>
+                                {selectedDrop.air_date && (
+                                    <span className={styles.cinematicMetaItem}>
+                                        <CalendarIcon size={13} />
+                                        {selectedDrop.air_date}
+                                        {selectedDrop.days_relative !== undefined && (
+                                            <span style={{ color: selectedDrop.days_relative === 0 ? '#f59e0b' : '#a1a1aa' }}>
+                                                ({selectedDrop.days_relative === 0
+                                                    ? 'Today'
+                                                    : selectedDrop.days_relative > 0
+                                                    ? `In ${selectedDrop.days_relative}d`
+                                                    : `${Math.abs(selectedDrop.days_relative)}d ago`})
+                                            </span>
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className={styles.cinematicActions}>
+                                <a
+                                    href={`https://www.google.com/search?q=${encodeURIComponent(
+                                        `Watch ${selectedDrop.title} ${
+                                            selectedDrop.available_on ? 'on ' + selectedDrop.available_on : ''
+                                        }`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.cinematicWatchBtn}
+                                >
+                                    <Play size={15} fill="currentColor" />
+                                    Watch on {selectedDrop.available_on || 'Provider'}
+                                    <ExternalLink size={13} />
+                                </a>
+                                <button
+                                    onClick={() => setSelectedDrop(null)}
+                                    className={styles.cinematicDismissBtn}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Day Schedule Modal (shown when clicking +N more or day header) */}
+            {selectedDay && (
+                <div
+                    className={styles.dayModalOverlay}
+                    onClick={() => setSelectedDay(null)}
+                >
+                    <div
+                        className={styles.dayModal}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className={styles.dayModalHeader}>
+                            <div>
+                                <h3 className={styles.dayModalTitle}>{selectedDay.dateFormatted}</h3>
+                                <p className={styles.dayModalSubtitle}>
+                                    {selectedDay.drops.length} {selectedDay.drops.length === 1 ? 'drop' : 'drops'} scheduled on this day
+                                </p>
+                            </div>
                             <button
-                                onClick={() => setSelectedDrop(null)}
-                                style={{
-                                    background: 'rgba(255,255,255,0.08)',
-                                    color: '#fff',
-                                    border: 'none',
-                                    padding: '10px 16px',
-                                    borderRadius: '8px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer'
-                                }}
+                                className={styles.dayModalCloseBtn}
+                                onClick={() => setSelectedDay(null)}
+                                title="Close"
                             >
-                                Close
+                                <X size={18} />
                             </button>
+                        </div>
+
+                        <div className={styles.dayModalDropsList}>
+                            {selectedDay.drops.map((drop, idx) => (
+                                <div
+                                    key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${idx}`}
+                                    className={`
+                                        ${styles.dayModalCard}
+                                        ${drop.is_on_active_subscription ? styles.dayModalCardActiveSub : ''}
+                                    `}
+                                >
+                                    {drop.poster_path ? (
+                                        /* eslint-disable-next-line @next/next/no-img-element */
+                                        <img
+                                            src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
+                                            alt={drop.title}
+                                            className={styles.dayModalPoster}
+                                        />
+                                    ) : (
+                                        <div className={styles.dayModalPosterPlaceholder}>
+                                            <Tv size={20} color="#71717a" />
+                                        </div>
+                                    )}
+
+                                    <div className={styles.dayModalDetails}>
+                                        <h4 className={styles.dayModalShowTitle}>{drop.title}</h4>
+                                        <div className={styles.dayModalEpInfo}>
+                                            Season {drop.season_number || 1} · Episode {drop.episode_number || 1}
+                                            {drop.episode_name ? `: "${drop.episode_name}"` : ''}
+                                        </div>
+
+                                        <div className={styles.dayModalBadgeRow}>
+                                            {drop.available_on ? (
+                                                <span
+                                                    className={`
+                                                        ${styles.dayModalSubPill}
+                                                        ${drop.is_on_active_subscription ? styles.dayModalSubPillActive : ''}
+                                                    `}
+                                                >
+                                                    <ServiceIcon
+                                                        name={drop.available_on}
+                                                        style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }}
+                                                    />
+                                                    <span className={styles.dayModalSubName}>{drop.available_on}</span>
+                                                    {drop.is_on_active_subscription && (
+                                                        <span className={styles.dayModalActiveCheck} title="Active subscription">
+                                                            <Check size={11} strokeWidth={3} />
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            ) : (
+                                                <span className={styles.dayModalSubPill}>
+                                                    Airing date confirmed
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <a
+                                        href={`https://www.google.com/search?q=${encodeURIComponent(
+                                            `Watch ${drop.title} ${
+                                                drop.available_on ? 'on ' + drop.available_on : ''
+                                            }`
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={styles.dayModalWatchBtn}
+                                    >
+                                        <ExternalLink size={13} />
+                                        Watch
+                                    </a>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>

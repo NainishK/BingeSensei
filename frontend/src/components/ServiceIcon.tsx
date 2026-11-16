@@ -3,27 +3,47 @@
 import React, { useState } from 'react';
 
 const SERVICE_DOMAINS: Record<string, string> = {
-    'Netflix': 'netflix.com',
-    'Amazon Prime Video': 'primevideo.com',
-    'Disney Plus': 'disneyplus.com',
-    'Spotify': 'spotify.com',
-    'Hulu': 'hulu.com',
-    'Max': 'max.com',
-    'Apple TV+': 'apple.com',
-    'YouTube Premium': 'youtube.com',
-    'Peacock': 'peacocktv.com',
-    'Paramount+': 'paramountplus.com',
-    'Crunchyroll': 'crunchyroll.com'
+    'netflix': 'netflix.com',
+    'amazon prime video': 'primevideo.com',
+    'prime video': 'primevideo.com',
+    'amazon prime': 'primevideo.com',
+    'disney plus': 'disneyplus.com',
+    'disney+': 'disneyplus.com',
+    'disney+ hotstar': 'hotstar.com',
+    'jiohotstar': 'hotstar.com',
+    'hotstar': 'hotstar.com',
+    'spotify': 'spotify.com',
+    'hulu': 'hulu.com',
+    'hulu japan': 'hulu.jp',
+    'max': 'max.com',
+    'hbo': 'max.com',
+    'apple tv+': 'apple.com',
+    'apple tv': 'apple.com',
+    'apple': 'apple.com',
+    'youtube premium': 'youtube.com',
+    'youtube': 'youtube.com',
+    'peacock': 'peacocktv.com',
+    'paramount+': 'paramountplus.com',
+    'paramount': 'paramountplus.com',
+    'crunchyroll': 'crunchyroll.com',
+    'zee5': 'zee5.com',
+    'sonyliv': 'sonyliv.com',
+    'abema': 'abema.tv',
+    'abema premium': 'abema.tv',
+    'fancode': 'fancode.com'
 };
 
 const getServiceLogo = (name: string) => {
-    const domain = SERVICE_DOMAINS[name];
-    if (domain) {
-        return `https://www.google.com/s2/favicons?sz=128&domain=${domain}`;
+    if (!name) return '';
+    const lower = name.toLowerCase().trim();
+    for (const [key, domain] of Object.entries(SERVICE_DOMAINS)) {
+        if (lower.includes(key) || key.includes(lower)) {
+            return `https://www.google.com/s2/favicons?sz=128&domain=${domain}`;
+        }
     }
 
     // Fallback search for unknown services
-    const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const slug = lower.replace(/[^a-z0-9]/g, '');
     return `https://www.google.com/s2/favicons?sz=128&domain=${slug}.com`;
 };
 
@@ -55,6 +75,8 @@ export const ServiceIcon: React.FC<ServiceIconProps> = ({ name, logoUrl: propLog
                 className={fallbackClassName}
                 style={{
                     backgroundColor: stringToColor(name),
+                    display: 'inline-block',
+                    flexShrink: 0,
                     ...style
                 }}
             >
@@ -68,8 +90,15 @@ export const ServiceIcon: React.FC<ServiceIconProps> = ({ name, logoUrl: propLog
             src={logoUrl}
             alt={`${name} logo`}
             className={className}
-            style={style}
+            style={{
+                display: 'inline-block',
+                flexShrink: 0,
+                ...style
+            }}
             onError={() => setError(true)}
         />
     );
 };
+
+export default ServiceIcon;
+

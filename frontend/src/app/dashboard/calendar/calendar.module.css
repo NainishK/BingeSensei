@@ -127,23 +127,31 @@
 }
 
 .syncBtn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--border);
-    color: var(--foreground);
-    padding: 7px 12px;
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    color: #60a5fa;
+    padding: 7px 13px;
     border-radius: 12px;
     font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.syncBtn:hover {
-    background: var(--accent);
+.syncBtn:hover:not(:disabled) {
+    background: rgba(37, 99, 235, 0.24);
+    border-color: rgba(37, 99, 235, 0.55);
+    color: #93c5fd;
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.syncBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* Compact Heatmap Strip */
@@ -194,7 +202,7 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .heatmapLegend {
@@ -203,6 +211,32 @@
     gap: 0.85rem;
     font-size: 0.78rem;
     color: var(--muted-foreground);
+}
+
+.legendRightGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.legendActiveSubPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.legendActiveSubDot {
+    width: 7px;
+    height: 7px;
+    background: #10b981;
+    border-radius: 2px;
 }
 
 .legendItem {
@@ -270,13 +304,23 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+}
+
+.scorecardServiceGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .scorecardService {
     font-weight: 700;
     font-size: 0.88rem;
     color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .scorecardCost {
@@ -361,20 +405,25 @@
 .calendarMonthGrid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: 172px;
     border-collapse: collapse;
 }
 
 /* Individual Calendar Day Cell */
 .calendarDayCell {
-    min-height: 125px;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    height: 172px;
+    min-height: 172px;
+    max-height: 172px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
     padding: 8px;
     display: flex;
     flex-direction: column;
     background: rgba(255, 255, 255, 0.01);
     transition: background 0.15s ease;
     position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* Remove right border on Saturday (last column) */
@@ -410,7 +459,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    height: 22px;
     margin-bottom: 6px;
+    flex-shrink: 0;
 }
 
 .cellDayNumber {
@@ -434,10 +485,19 @@
 .dropCountBadge {
     font-size: 0.65rem;
     font-weight: 700;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.15);
-    padding: 1px 5px;
+    color: var(--muted-foreground);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 1px 6px;
     border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dropCountBadge:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--foreground);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Cards Stack inside cell */
@@ -446,6 +506,7 @@
     flex-direction: column;
     gap: 5px;
     flex: 1;
+    min-height: 0;
 }
 
 /* Rich Episode Card inside Calendar Day */
@@ -453,17 +514,20 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 8px;
-    padding: 4px 6px;
+    padding: 3px 6px;
     cursor: pointer;
     transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     min-width: 0;
+    height: 45px;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .gridDropCard:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.09);
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     border-color: rgba(255, 255, 255, 0.2);
@@ -471,23 +535,42 @@
 
 .gridDropCardActiveSub {
     border-left: 3px solid #10b981;
-    background: rgba(16, 185, 129, 0.08);
+    background: rgba(16, 185, 129, 0.06);
+}
+
+.gridDropCardActiveSub:hover {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    border-left-color: #10b981;
 }
 
 .cardMiniPoster {
-    width: 24px;
-    height: 36px;
+    width: 25px;
+    height: 37px;
     border-radius: 4px;
     object-fit: cover;
     flex-shrink: 0;
     background: #18181b;
 }
 
+.cardMiniPosterPlaceholder {
+    width: 25px;
+    height: 37px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
 .cardDetails {
     display: flex;
     flex-direction: column;
+    justify-content: center;
     min-width: 0;
     flex: 1;
+    overflow: hidden;
 }
 
 .cardShowTitle {
@@ -497,27 +580,495 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 
 .cardEpTag {
-    font-size: 0.64rem;
+    font-size: 0.63rem;
     font-weight: 600;
     color: #a1a1aa;
-    line-height: 1.2;
+    line-height: 1.15;
     margin-top: 1px;
 }
 
-.cardProviderDot {
+.cardProviderRow {
     display: flex;
     align-items: center;
     gap: 4px;
     font-size: 0.6rem;
-    color: #34d399;
+    line-height: 1.15;
     margin-top: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.cardProviderActive {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #34d399;
+    font-weight: 600;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.cardProviderNeutral {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #a1a1aa;
+    font-weight: 500;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.providerName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.cardNoProvider {
+    color: #71717a;
+    font-size: 0.58rem;
+    font-style: italic;
+}
+
+.moreDropsBtn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    margin-top: auto;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.moreDropsBtn:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* Day Schedule Popover Modal */
+.dayModalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.dayModal {
+    background: rgba(24, 24, 27, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-width: 520px;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    animation: scaleIn 0.2s ease-out;
+}
+
+.dayModalHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.85rem;
+}
+
+.dayModalTitle {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--foreground);
+    margin: 0 0 4px;
+}
+
+.dayModalSubtitle {
+    font-size: 0.82rem;
+    color: var(--muted-foreground);
+    margin: 0;
+}
+
+.dayModalCloseBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--muted-foreground);
+    border-radius: 8px;
+    padding: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.dayModalCloseBtn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.dayModalDropsList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    overflow-y: auto;
+    padding-right: 4px;
+    flex: 1;
+}
+
+.dayModalCard {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 12px;
+    transition: background 0.2s;
+}
+
+.dayModalCardActiveSub {
+    border-left: 4px solid #10b981;
+    background: rgba(16, 185, 129, 0.06);
+}
+
+.dayModalPoster {
+    width: 44px;
+    height: 64px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #18181b;
+}
+
+.dayModalPosterPlaceholder {
+    width: 44px;
+    height: 64px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dayModalDetails {
+    flex: 1;
+    min-width: 0;
+}
+
+.dayModalShowTitle {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--foreground);
+    margin: 0 0 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dayModalEpInfo {
+    font-size: 0.8rem;
+    color: #a1a1aa;
+    margin-bottom: 6px;
+}
+
+.dayModalBadgeRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.dayModalSubPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.dayModalSubPillActive {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.dayModalSubName {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.dayModalActiveCheck {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #10b981;
+    flex-shrink: 0;
+    margin-left: 1px;
+}
+
+.dayModalWatchBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background: #2563eb;
+    border-radius: 8px;
+    padding: 6px 10px;
+    text-decoration: none;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.dayModalWatchBtn:hover {
+    background: #1d4ed8;
+}
+
+/* Cinematic Quick Watch Drop Modal */
+.cinematicModalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.25rem;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.cinematicModal {
+    background: #141417;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    max-width: 480px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+    animation: scaleIn 0.22s ease-out;
+    position: relative;
+}
+
+.cinematicBannerArea {
+    position: relative;
+    width: 100%;
+    height: 190px;
+    background: #1c1c21;
+    overflow: hidden;
+}
+
+.cinematicBannerImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 25%;
+}
+
+.cinematicBannerPlaceholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cinematicBannerGradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 72%, rgba(20, 20, 23, 0.45) 86%, #141417 100%);
+}
+
+.cinematicCloseBtn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.cinematicCloseBtn:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: scale(1.08);
+}
+
+.cinematicBody {
+    padding: 0 1.5rem 1.5rem;
+    position: relative;
+}
+
+.cinematicTagsRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+}
+
+.cinematicBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e4e4e7;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cinematicBadgeActiveSub {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.cinematicShowTitle {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 4px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.cinematicEpTitle {
+    font-size: 0.88rem;
+    color: #a1a1aa;
+    margin: 0 0 1rem;
+    line-height: 1.35;
+}
+
+.cinematicMetaInfo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.78rem;
+    color: #71717a;
+    margin-bottom: 1.35rem;
+    flex-wrap: wrap;
+}
+
+.cinematicMetaItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.cinematicActions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cinematicWatchBtn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff;
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transition: all 0.2s ease;
+}
+
+.cinematicWatchBtn:hover {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+}
+
+.cinematicDismissBtn {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    padding: 11px 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cinematicDismissBtn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 /* ======================================================== */
@@ -583,6 +1134,63 @@
     flex-shrink: 0;
 }
 
+.agendaShowTitle {
+    margin: 0 0 3px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--foreground);
+    line-height: 1.25;
+}
+
+.agendaEpInfo {
+    font-size: 0.8rem;
+    color: #a1a1aa;
+    margin-bottom: 5px;
+}
+
+/* Mobile Drop Indicators for 7-Day Month Grid */
+.cellMobileIndicator {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-top: auto;
+    margin-bottom: auto;
+    width: 100%;
+    cursor: pointer;
+}
+
+.mobileDropsPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--foreground);
+    transition: all 0.18s ease;
+}
+
+.mobileDropsPillActive {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+
+.mobileDropsCount {
+    line-height: 1;
+}
+
+.mobileServiceIconsRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
 .emptyCalendar {
     text-align: center;
     padding: 4rem 1rem;
@@ -598,19 +1206,479 @@
     color: #f59e0b;
 }
 
-/* Responsive adjustments */
-@media (max-width: 900px) {
-    .calendarDayCell {
-        min-height: 95px;
-        padding: 4px;
+/* ======================================================== */
+/* 📱 MOBILE RESPONSIVENESS (< 768px)                       */
+/* ======================================================== */
+
+@media (max-width: 768px) {
+    .pageContainer {
+        padding: 0.85rem 0.5rem 2.5rem;
     }
 
-    .cardMiniPoster {
+    .header {
+        gap: 0.75rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .titleArea h1 {
+        font-size: 1.35rem;
+    }
+
+    .headerControls {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .monthNav {
+        padding: 2px 4px;
+    }
+
+    .monthTitle {
+        min-width: 105px;
+        font-size: 0.82rem;
+        padding: 0 4px;
+    }
+
+    .monthBtn {
+        width: 28px;
+        height: 28px;
+    }
+
+    .todayBtn {
+        padding: 3px 8px;
+        font-size: 0.72rem;
+    }
+
+    .viewToggle {
+        padding: 2px;
+    }
+
+    .toggleBtn {
+        padding: 4px 8px;
+        font-size: 0.74rem;
+        gap: 4px;
+    }
+
+    .syncBtn {
+        padding: 5px 10px;
+        font-size: 0.74rem;
+        gap: 4px;
+    }
+
+    .heatmapStrip {
+        padding: 0.75rem 0.85rem;
+        margin-bottom: 1rem;
+        border-radius: 12px;
+    }
+
+    .scorecardDrawer {
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+    }
+
+    /* Clean mobile 7-day grid */
+    .calendarMonthGrid {
+        grid-auto-rows: 62px;
+    }
+
+    .calendarDayCell {
+        height: 62px;
+        min-height: 62px;
+        max-height: 62px;
+        padding: 4px 2px;
+    }
+
+    .cellDateHeader {
+        height: 16px;
+        margin-bottom: 2px;
+        justify-content: center;
+    }
+
+    .cellDayNumber {
+        font-size: 0.75rem;
+    }
+
+    .todayPill {
+        font-size: 0.52rem;
+        padding: 1px 3px;
+        letter-spacing: 0;
+    }
+
+    .dropCountBadge {
         display: none;
     }
 
     .weekHeaderCell {
-        font-size: 0.7rem;
-        padding: 8px 2px;
+        font-size: 0.65rem;
+        padding: 6px 1px;
+    }
+
+    /* Hide desktop multi-line cards on mobile */
+    .cellDropsStack {
+        display: none !important;
+    }
+
+    /* Show neat drop indicator pill on mobile */
+    .cellMobileIndicator {
+        display: flex;
+    }
+
+    /* Modals on mobile */
+    .cinematicModal,
+    .dayModal {
+        max-width: 95vw;
+        border-radius: 16px;
+        padding: 1.15rem 0.85rem;
+    }
+
+    .dayModalCard {
+        padding: 8px 10px;
+        gap: 10px;
+    }
+
+    .dayModalPoster,
+    .dayModalPosterPlaceholder {
+        width: 40px;
+        height: 58px;
+    }
+
+    .dayModalShowTitle {
+        font-size: 0.88rem;
+    }
+
+    .dayModalEpInfo {
+        font-size: 0.74rem;
+        margin-bottom: 4px;
+    }
+
+    .dayModalWatchBtn {
+        padding: 5px 9px;
+        font-size: 0.72rem;
+    }
+
+    .cinematicBannerArea {
+        height: 150px;
+    }
+
+    .cinematicBody {
+        padding: 0 1rem 1rem;
+    }
+
+    .cinematicShowTitle {
+        font-size: 1.15rem;
+    }
+
+    .agendaCardsRow {
+        grid-template-columns: 1fr;
     }
 }
+
+/* ======================================================== */
+/* ☀️ LIGHT THEME ADAPTATIONS                              */
+/* ======================================================== */
+
+:global([data-theme='light']) .monthNav,
+:global([data-theme='light']) .viewToggle {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme='light']) .syncBtn {
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.28);
+    color: #2563eb;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+}
+
+:global([data-theme='light']) .syncBtn:hover:not(:disabled) {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+:global([data-theme='light']) .todayBtn {
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+}
+
+:global([data-theme='light']) .heatmapStrip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+:global([data-theme='light']) .heatmapBar {
+    background: #e2e8f0;
+}
+
+:global([data-theme='light']) .scorecardDrawer {
+    border-top: 1px solid var(--border);
+}
+
+:global([data-theme='light']) .scorecard {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme='light']) .calendarContainer {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+:global([data-theme='light']) .weekHeaderRow {
+    background: #f1f5f9;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+:global([data-theme='light']) .calendarDayCell {
+    border-right: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+}
+
+:global([data-theme='light']) .calendarDayCell:nth-child(7n) {
+    border-right: none;
+}
+
+:global([data-theme='light']) .calendarDayCell:hover {
+    background: #f8fafc;
+}
+
+:global([data-theme='light']) .calendarDayCellDimmed {
+    opacity: 0.5;
+    background: #f8fafc;
+}
+
+:global([data-theme='light']) .dropCountBadge {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+:global([data-theme='light']) .dropCountBadge:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .gridDropCard {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme='light']) .gridDropCard:hover {
+    background: #ffffff;
+    border-color: #94a3b8;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+:global([data-theme='light']) .gridDropCardActiveSub {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.35);
+    border-left: 3px solid #059669;
+}
+
+:global([data-theme='light']) .gridDropCardActiveSub:hover {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.45);
+    border-left-color: #059669;
+}
+
+:global([data-theme='light']) .cardProviderNeutral {
+    color: #64748b;
+}
+
+:global([data-theme='light']) .cardProviderActive {
+    color: #059669;
+}
+
+:global([data-theme='light']) .moreDropsBtn {
+    background: #f1f5f9;
+    border: 1px dashed #cbd5e1;
+    color: #475569;
+}
+
+:global([data-theme='light']) .moreDropsBtn:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .cinematicModal {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+}
+
+:global([data-theme='light']) .cinematicBannerArea {
+    background: #f1f5f9;
+}
+
+:global([data-theme='light']) .cinematicBannerGradient {
+    background: linear-gradient(to bottom, transparent 72%, rgba(255, 255, 255, 0.35) 86%, #ffffff 100%);
+}
+
+:global([data-theme='light']) .cinematicCloseBtn {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .cinematicCloseBtn:hover {
+    background: #ffffff;
+}
+
+:global([data-theme='light']) .cinematicShowTitle {
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .cinematicEpTitle {
+    color: #64748b;
+}
+
+:global([data-theme='light']) .cinematicMetaInfo {
+    color: #64748b;
+}
+
+:global([data-theme='light']) .cinematicBadge {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+:global([data-theme='light']) .cinematicBadgeActiveSub {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+}
+
+:global([data-theme='light']) .cinematicDismissBtn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+:global([data-theme='light']) .cinematicDismissBtn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .dayModal {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+}
+
+:global([data-theme='light']) .dayModalHeader {
+    border-bottom: 1px solid var(--border);
+}
+
+:global([data-theme='light']) .dayModalCloseBtn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+}
+
+:global([data-theme='light']) .dayModalCloseBtn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .dayModalCard {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+}
+
+:global([data-theme='light']) .dayModalCard:hover {
+    background: #f1f5f9;
+}
+
+:global([data-theme='light']) .dayModalCardActiveSub {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.35);
+    border-left: 4px solid #059669;
+}
+
+:global([data-theme='light']) .dayModalSubPill {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
+:global([data-theme='light']) .dayModalSubPillActive {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+}
+
+:global([data-theme='light']) .dayModalActiveCheck {
+    color: #059669;
+}
+
+:global([data-theme='light']) .agendaDateBlock {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+:global([data-theme='light']) .agendaDateBlockToday {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.05);
+    box-shadow: 0 0 0 1px #f59e0b, 0 4px 14px rgba(245, 158, 11, 0.12);
+}
+
+.pulseHighlight {
+    animation: todayPulse 1.4s ease-in-out;
+}
+
+@keyframes todayPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: none;
+    }
+    40% {
+        transform: scale(1.01);
+        box-shadow: 0 0 0 3px #f59e0b, 0 0 24px rgba(245, 158, 11, 0.45);
+    }
+}
+
+:global([data-theme='light']) .agendaCard {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+:global([data-theme='light']) .agendaCard:hover {
+    background: #f1f5f9;
+}
+
+:global([data-theme='light']) .emptyCalendar {
+    background: #ffffff;
+    border: 1px solid var(--border);
+}
+
+:global([data-theme='light']) .agendaShowTitle {
+    color: #0f172a !important;
+}
+
+:global([data-theme='light']) .agendaEpInfo {
+    color: #64748b;
+}
+
+:global([data-theme='light']) .mobileDropsPill {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .mobileDropsPillActive {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #059669;
+}
+
+
