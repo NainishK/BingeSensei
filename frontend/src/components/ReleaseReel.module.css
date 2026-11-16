@@ -9,6 +9,16 @@
     position: relative;
     overflow: hidden;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.2);
+    transition: padding 0.25s ease, margin 0.25s ease;
+}
+
+.containerCollapsed {
+    padding: 0.65rem 1.15rem;
+    margin-bottom: 1.25rem;
+}
+
+.containerCollapsed .headerRow {
+    margin-bottom: 0;
 }
 
 .container::before {
@@ -34,6 +44,48 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s ease;
+}
+
+.titleArea:hover {
+    opacity: 0.9;
+}
+
+.collapsedPreviewAvatars {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    gap: 4px;
+}
+
+.miniPreviewAvatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1.5px solid rgba(245, 158, 11, 0.6);
+    background: #18181b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.miniPreviewAvatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.miniMoreCount {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--muted-foreground);
+    margin-left: 2px;
 }
 
 .radarBadge {
@@ -78,6 +130,22 @@
     margin: 0;
 }
 
+.desktopTitleText {
+    display: inline;
+}
+
+.mobileTitleText {
+    display: none;
+}
+
+.radarBadgeTextDesktop {
+    display: inline;
+}
+
+.radarBadgeTextMobile {
+    display: none;
+}
+
 .calendarLink {
     display: inline-flex;
     align-items: center;
@@ -97,6 +165,33 @@
     background: rgba(96, 165, 250, 0.2);
     color: #93c5fd;
     transform: translateY(-1px);
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggleCollapseBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggleCollapseBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--foreground);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Horizontal Scroll Strip */
@@ -471,6 +566,27 @@
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
 }
 
+:global([data-theme='light']) .collapsedPreviewAvatars {
+    border-left-color: #cbd5e1;
+}
+
+:global([data-theme='light']) .miniPreviewAvatar {
+    border-color: rgba(245, 158, 11, 0.8);
+    background: #f1f5f9;
+}
+
+:global([data-theme='light']) .toggleCollapseBtn {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+
+:global([data-theme='light']) .toggleCollapseBtn:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
 :global([data-theme='light']) .reelScroll {
     scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
@@ -557,27 +673,85 @@
         border-radius: 12px;
     }
 
+    .containerCollapsed {
+        padding: 0.55rem 0.75rem;
+        margin-bottom: 0.85rem;
+    }
+
     .headerRow {
         margin-bottom: 0.65rem;
-        gap: 0.4rem;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .containerCollapsed .headerRow {
+        margin-bottom: 0;
     }
 
     .titleArea {
+        min-width: 0;
+        flex: 1;
         gap: 6px;
     }
 
     .radarBadge {
         padding: 2px 6px;
         font-size: 0.65rem;
+        flex-shrink: 0;
     }
 
-    .title {
-        font-size: 0.84rem;
+    .radarBadgeTextDesktop {
+        display: none;
+    }
+
+    .radarBadgeTextMobile {
+        display: inline;
+    }
+
+    .desktopTitleText {
+        display: none;
+    }
+
+    .mobileTitleText {
+        display: inline;
+        font-size: 0.82rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .collapsedPreviewAvatars {
+        display: none;
+    }
+
+    .headerActions {
+        flex-shrink: 0;
+        gap: 5px;
     }
 
     .calendarLink {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+    }
+
+    .calendarLinkText {
+        display: none;
+    }
+
+    .toggleCollapseBtn {
+        height: 30px;
+        padding: 0 8px;
         font-size: 0.72rem;
-        padding: 3px 8px;
+        gap: 3px;
+        border-radius: 8px;
     }
 
     .reelScroll {

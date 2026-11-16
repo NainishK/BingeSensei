@@ -5,7 +5,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import styles from './ReleaseReel.module.css';
-import { Zap, Play, X, Calendar, Check, ExternalLink, Sparkles, Tv } from 'lucide-react';
+import { Play, X, Calendar, Check, ExternalLink, Sparkles, Tv, ChevronDown, ChevronUp } from 'lucide-react';
 
 export interface ActivityDrop {
     item_id: number;
@@ -44,6 +44,26 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
     const [loading, setLoading] = useState(true);
     const [selectedDrop, setSelectedDrop] = useState<ActivityDrop | null>(null);
     const [resurrecting, setResurrecting] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
+
+    useEffect(() => {
+        const saved = localStorage.getItem('release_radar_collapsed');
+        if (saved !== null) {
+            setIsCollapsed(saved === 'true');
+        }
+    }, []);
+
+    const toggleCollapse = () => {
+        setIsCollapsed(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem('release_radar_collapsed', String(next));
+            } catch {
+                // Ignore storage errors
+            }
+            return next;
+        });
+    };
 
     const fetchDrops = async () => {
         try {
@@ -120,72 +140,126 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
 
     return (
         <>
-            <div className={styles.container}>
+            <div className={`${styles.container} ${isCollapsed ? styles.containerCollapsed : ''}`}>
                 <div className={styles.headerRow}>
-                    <div className={styles.titleArea}>
+                    <div
+                        className={styles.titleArea}
+                        onClick={toggleCollapse}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleCollapse();
+                            }
+                        }}
+                    >
                         <div className={styles.radarBadge}>
                             <span className={styles.radarPulse}></span>
-                            Release Radar
+                            <span className={styles.radarBadgeTextDesktop}>Release Radar</span>
+                            <span className={styles.radarBadgeTextMobile}>Radar</span>
                         </div>
                         <h4 className={styles.title}>
-                            {feed.reel_items.length} Fresh & Upcoming Drops
+                            <span className={styles.desktopTitleText}>
+                                {feed.reel_items.length} Fresh & Upcoming Drops
+                            </span>
+                            <span className={styles.mobileTitleText}>
+                                {feed.reel_items.length} Drops
+                            </span>
                         </h4>
-                    </div>
 
-                    <Link href="/dashboard/calendar" className={styles.calendarLink}>
-                        <Calendar size={14} />
-                        Calendar & Heatmap
-                    </Link>
-                </div>
-
-                <div className={styles.reelScroll}>
-                    {feed.reel_items.map((drop, idx) => (
-                        <div
-                            key={`${drop.item_id}-${drop.drop_type}-${idx}`}
-                            className={styles.reelItem}
-                            onClick={() => setSelectedDrop(drop)}
-                        >
-                            <div className={`${styles.avatarWrapper} ${getRingClass(drop.drop_type)}`}>
-                                {drop.poster_path ? (
-                                    <img
-                                        src={`https://image.tmdb.org/t/p/w185${drop.poster_path}`}
-                                        alt={drop.title}
-                                        className={styles.avatarImg}
-                                        loading="lazy"
-                                    />
-                                ) : (
-                                    <div className={styles.avatarFallback}>
-                                        <Tv size={24} />
+                        {isCollapsed && (
+                            <div className={styles.collapsedPreviewAvatars} title="Click to view drops">
+                                {feed.reel_items.slice(0, 4).map((item, idx) => (
+                                    <div key={idx} className={styles.miniPreviewAvatar}>
+                                        {item.poster_path ? (
+                                            /* eslint-disable-next-line @next/next/no-img-element */
+                                            <img
+                                                src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
+                                                alt={item.title}
+                                            />
+                                        ) : (
+                                            <Tv size={10} color="#71717a" />
+                                        )}
                                     </div>
+                                ))}
+                                {feed.reel_items.length > 4 && (
+                                    <span className={styles.miniMoreCount}>+{feed.reel_items.length - 4}</span>
                                 )}
                             </div>
+                        )}
+                    </div>
 
-                            <div className={styles.itemTitle} title={drop.title}>
-                                {drop.title}
-                            </div>
+                    <div className={styles.headerActions}>
+                        <Link href="/dashboard/calendar" className={styles.calendarLink}>
+                            <Calendar size={13} />
+                            <span className={styles.calendarLinkText}>Calendar</span>
+                        </Link>
 
-                            <span className={`${styles.dropTag} ${getTagClass(drop.drop_type)}`}>
-                                {formatRelativeText(drop)}
-                            </span>
-
-                            {drop.available_on && (
-                                <span
-                                    className={`${styles.providerPill} ${drop.is_on_active_subscription ? styles.providerActive : ''}`}
-                                    title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
-                                >
-                                    <ServiceIcon
-                                        name={drop.available_on}
-                                        style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
-                                    />
-                                    <span className={styles.providerNameText}>{drop.available_on}</span>
-                                    {drop.is_on_active_subscription && (
-                                        <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} />
-                                    )}
-                                </span>
-                            )}
-                        </div>
-                    ))}
+                        <button
+                            type="button"
+                            onClick={toggleCollapse}
+                            className={styles.toggleCollapseBtn}
+                            aria-expanded={!isCollapsed}
+                            title={isCollapsed ? 'Show drops' : 'Hide drops'}
+                        >
+                            <span>{isCollapsed ? 'Show' : 'Hide'}</span>
+                            {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                        </button>
+                    </div>
                 </div>
+
+                {!isCollapsed && (
+                    <div className={styles.reelScroll}>
+                        {feed.reel_items.map((drop, idx) => (
+                            <div
+                                key={`${drop.item_id}-${drop.drop_type}-${idx}`}
+                                className={styles.reelItem}
+                                onClick={() => setSelectedDrop(drop)}
+                            >
+                                <div className={`${styles.avatarWrapper} ${getRingClass(drop.drop_type)}`}>
+                                    {drop.poster_path ? (
+                                        /* eslint-disable-next-line @next/next/no-img-element */
+                                        <img
+                                            src={`https://image.tmdb.org/t/p/w185${drop.poster_path}`}
+                                            alt={drop.title}
+                                            className={styles.avatarImg}
+                                            loading="lazy"
+                                        />
+                                    ) : (
+                                        <div className={styles.avatarFallback}>
+                                            <Tv size={24} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className={styles.itemTitle} title={drop.title}>
+                                    {drop.title}
+                                </div>
+
+                                <span className={`${styles.dropTag} ${getTagClass(drop.drop_type)}`}>
+                                    {formatRelativeText(drop)}
+                                </span>
+
+                                {drop.available_on && (
+                                    <span
+                                        className={`${styles.providerPill} ${drop.is_on_active_subscription ? styles.providerActive : ''}`}
+                                        title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
+                                    >
+                                        <ServiceIcon
+                                            name={drop.available_on}
+                                            style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
+                                        />
+                                        <span className={styles.providerNameText}>{drop.available_on}</span>
+                                        {drop.is_on_active_subscription && (
+                                            <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} />
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Drop Details Modal */}
@@ -201,6 +275,7 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
                         </button>
 
                         <div className={styles.modalImageArea}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={
                                     selectedDrop.episode_still
