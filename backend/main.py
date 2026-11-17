@@ -138,20 +138,13 @@ admin.add_view(SubscriptionAdmin)
 admin.add_view(WatchlistAdmin)
 # -------------------------
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    error_msg = "".join(traceback.format_exception(None, exc, exc.__traceback__))
-    logger.error(f"Global Exception: {error_msg}")
-    return JSONResponse(
-        status_code=500,
-        content={"message": "Internal Server Error", "details": str(exc)},
-    )
-
 is_production = getattr(settings, "ENVIRONMENT", "development").lower() == "production"
 
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://bingesensei.app",
+    "https://www.bingesensei.app",
 ]
 if not is_production:
     origins.append("*")
@@ -160,6 +153,23 @@ if hasattr(settings, "FRONTEND_URL") and settings.FRONTEND_URL:
     clean_frontend_url = settings.FRONTEND_URL.rstrip("/")
     if clean_frontend_url not in origins:
         origins.append(clean_frontend_url)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = "".join(traceback.format_exception(None, exc, exc.__traceback__))
+    logger.error(f"Global Exception on {request.method} {request.url.path}: {error_msg}")
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin and (origin in origins or "*" in origins):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Allow-Methods"] = "*"
+        headers["Access-Control-Allow-Headers"] = "*"
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "details": str(exc)},
+        headers=headers
+    )
 
 from starlette.middleware.sessions import SessionMiddleware
 

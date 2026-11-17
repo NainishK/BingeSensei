@@ -3,88 +3,96 @@ import sqlalchemy
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
-# Load params
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not DATABASE_URL:
-    print("⚠️  DATABASE_URL not set. Defaulting to local SQLite.")
-    DATABASE_URL = "sqlite:///./sql_app.db"
-
-# Fix Postgres URL if needed
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-print(f"🔄 Connecting to Database...")
-engine = create_engine(DATABASE_URL)
+def get_engine():
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        database_url = "sqlite:///./sql_app.db"
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    return create_engine(database_url)
 
 def run_migration():
+    engine = get_engine()
+    is_sqlite = "sqlite" in str(engine.url)
+    print(f"Connecting to Database ({'SQLite' if is_sqlite else 'PostgreSQL'})...")
+    
     with engine.connect() as conn:
-        print("🔍 Checking schema...")
+        print("Checking schema...")
         
-        # Check if columns exist
-        # We can try to select them, if fail, we add them. 
-        # Or just blindly try adding with "IF NOT EXISTS" equivalent logic (Postgres supports it via DO block or just exception handling)
-        
-        # Simpler approach: Try adding each column, catch "duplicate column" error
+        # Table, Column, Postgres DDL, SQLite DDL
         columns_to_add = [
-            ("watchlist_items", "total_episodes", "INTEGER DEFAULT 0"),
-            ("users", "google_id", "TEXT UNIQUE"),
-            ("users", "avatar_url", "TEXT"),
-            ("subscriptions", "country", "TEXT DEFAULT 'US'"),
-            ("watchlist_items", "original_language", "TEXT"),
-            ("watchlist_items", "notes", "TEXT"),
-            ("watchlist_items", "is_followed", "BOOLEAN DEFAULT 0"),
-            ("watchlist_items", "next_air_date", "DATE"),
-            ("watchlist_items", "next_episode_season", "INTEGER"),
-            ("watchlist_items", "next_episode_number", "INTEGER"),
-            ("watchlist_items", "next_episode_name", "TEXT"),
-            ("watchlist_items", "last_air_date", "DATE"),
-            ("watchlist_items", "last_episode_season", "INTEGER"),
-            ("watchlist_items", "last_episode_number", "INTEGER"),
-            ("watchlist_items", "last_episode_name", "TEXT"),
-            ("watchlist_items", "last_episode_still", "TEXT"),
-            ("watchlist_items", "air_status", "TEXT"),
-            ("watchlist_items", "last_air_check", "DATETIME"),
+            ("users", "google_id", "TEXT", "TEXT"),
+            ("users", "avatar_url", "TEXT", "TEXT"),
+            ("users", "preferences", "TEXT", "TEXT"),
+            ("users", "ai_allowed", "BOOLEAN DEFAULT FALSE", "BOOLEAN DEFAULT 0"),
+            ("users", "ai_access_status", "TEXT DEFAULT 'none'", "TEXT DEFAULT 'none'"),
+            ("users", "ai_quota_policy", "TEXT DEFAULT 'unlimited'", "TEXT DEFAULT 'unlimited'"),
+            ("users", "ai_request_limit", "INTEGER DEFAULT 5", "INTEGER DEFAULT 5"),
+            ("users", "ai_usage_count", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+            ("users", "last_ai_usage", "TIMESTAMP WITH TIME ZONE", "DATETIME"),
+
+            ("subscriptions", "country", "TEXT DEFAULT 'US'", "TEXT DEFAULT 'US'"),
+            ("subscriptions", "category", "TEXT DEFAULT 'OTT'", "TEXT DEFAULT 'OTT'"),
+
+            ("watchlist_items", "total_seasons", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+            ("watchlist_items", "total_episodes", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+            ("watchlist_items", "current_season", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+            ("watchlist_items", "current_episode", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0"),
+            ("watchlist_items", "original_language", "TEXT", "TEXT"),
+            ("watchlist_items", "notes", "TEXT", "TEXT"),
+            ("watchlist_items", "is_followed", "BOOLEAN DEFAULT FALSE", "BOOLEAN DEFAULT 0"),
+            ("watchlist_items", "next_air_date", "DATE", "DATE"),
+            ("watchlist_items", "next_episode_season", "INTEGER", "INTEGER"),
+            ("watchlist_items", "next_episode_number", "INTEGER", "INTEGER"),
+            ("watchlist_items", "next_episode_name", "TEXT", "TEXT"),
+            ("watchlist_items", "last_air_date", "DATE", "DATE"),
+            ("watchlist_items", "last_episode_season", "INTEGER", "INTEGER"),
+            ("watchlist_items", "last_episode_number", "INTEGER", "INTEGER"),
+            ("watchlist_items", "last_episode_name", "TEXT", "TEXT"),
+            ("watchlist_items", "last_episode_still", "TEXT", "TEXT"),
+            ("watchlist_items", "air_status", "TEXT", "TEXT"),
+            ("watchlist_items", "last_air_check", "TIMESTAMP WITH TIME ZONE", "DATETIME"),
         ]
         
-        for table, col, dtype in columns_to_add:
+        for table, col, pg_dtype, sqlite_dtype in columns_to_add:
             try:
-                print(f"   Adding column {col} to {table}...")
-                # SQLite Workaround for UNIQUE
-                is_sqlite = "sqlite" in str(conn.engine.url)
-                if is_sqlite and "UNIQUE" in dtype:
-                    # 1. Add column without UNIQUE
-                    safe_dtype = dtype.replace("UNIQUE", "").strip()
-                    sql = text(f"ALTER TABLE {table} ADD COLUMN {col} {safe_dtype}")
+                if not is_sqlite:
+                    # PostgreSQL natively supports "ADD COLUMN IF NOT EXISTS"
+                    sql = text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {pg_dtype};")
                     conn.execute(sql)
                     conn.commit()
-                    
-                    # 2. Add Unique Index
-                    index_sql = text(f"CREATE UNIQUE INDEX IF NOT EXISTS ix_{table}_{col} ON {table} ({col})")
-                    conn.execute(index_sql)
-                    conn.commit()
+                    print(f"   Verified/Added {col} to {table} (Postgres)")
                 else:
-                    sql = text(f"ALTER TABLE {table} ADD COLUMN {col} {dtype}")
+                    # SQLite does not support IF NOT EXISTS on ADD COLUMN
+                    sql = text(f"ALTER TABLE {table} ADD COLUMN {col} {sqlite_dtype};")
                     conn.execute(sql)
                     conn.commit()
-                
-                print(f"   ✅ Added {col}")
+                    print(f"   Added {col} to {table} (SQLite)")
             except Exception as e:
-                # IMPORTANT: Postgres requires rollback after error to reset transaction state
                 conn.rollback()
-                
-                # Check for "Duplicate column" error
-                if "already exists" in str(e) or "duplicate column name" in str(e):
-                    print(f"   ⚠️  Column {col} already exists (Skipping)")
+                err_str = str(e).lower()
+                if "already exists" in err_str or "duplicate column name" in err_str:
+                    print(f"   Column {col} on {table} already exists (Skipping)")
                 else:
-                    print(f"   ❌ Error adding {col}: {e}")
+                    print(f"   Error adding {col} to {table}: {e}")
 
-        print("✅ Schema Migration Complete")
+        # Unique index for google_id
+        try:
+            index_sql = text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_id ON users (google_id);")
+            conn.execute(index_sql)
+            conn.commit()
+            print("   Verified index ix_users_google_id")
+        except Exception as e:
+            conn.rollback()
+            print(f"   Note on ix_users_google_id: {e}")
+
+        print("Schema Migration Complete")
 
 if __name__ == "__main__":
     try:
         run_migration()
-        print("\n✅ Migration Complete!")
+        print("\nMigration Complete!")
     except Exception as e:
-        print(f"\n❌ Migration Failed: {e}")
+        print(f"\nMigration Failed: {e}")
