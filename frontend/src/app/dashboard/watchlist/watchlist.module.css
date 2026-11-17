@@ -631,12 +631,25 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1.25rem;
+    animation: watchlistFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .watchlistList {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    animation: watchlistFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes watchlistFadeIn {
+    0% {
+        opacity: 0.55;
+        transform: translateY(6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Responsive */
@@ -1042,4 +1055,441 @@
     background: rgba(99, 102, 241, 0.08);
     border-color: rgba(99, 102, 241, 0.2);
     color: #cbd5e1;
+}
+
+/* ==========================================================================
+   Apple Dynamic Island Sticky Status Bar
+   ========================================================================== */
+
+.dynamicIslandPortal {
+    position: fixed;
+    top: 1.25rem;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 90;
+    opacity: 0;
+    transform: translateY(-24px) scale(0.92);
+    transition: 
+        transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamicIslandPortalVisible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.dynamicIslandPortal:not(.dynamicIslandPortalVisible) {
+    pointer-events: none !important;
+}
+
+.dynamicIslandPortal:not(.dynamicIslandPortalVisible) * {
+    pointer-events: none !important;
+}
+
+@media (max-width: 768px) {
+    .dynamicIslandPortal {
+        top: 4.25rem; /* Below the 56px fixed mobile header */
+    }
+}
+
+/* Full Desktop Dock Container */
+.dynamicIslandFull {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(13, 16, 24, 0.88);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 
+        0 20px 42px -8px rgba(0, 0, 0, 0.7),
+        0 6px 18px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:global([data-theme='light']) .dynamicIslandFull {
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 
+        0 16px 36px -6px rgba(0, 0, 0, 0.12),
+        0 4px 12px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Tabs wrapper inside Full Dock */
+.dynamicIslandTabs {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Sliding Liquid Active Indicator Pill */
+.dynamicIslandActiveIndicator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 9999px;
+    pointer-events: none;
+    border: 1px solid transparent;
+    transition: 
+        left 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        width 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        background-color 0.32s ease,
+        border-color 0.32s ease,
+        box-shadow 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.25s ease;
+    z-index: 0;
+}
+
+/* Island Pulse & Squish on Tab Switch */
+.dynamicIslandPulsing {
+    animation: islandSquishPop 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes islandSquishPop {
+    0% {
+        transform: scale(1);
+    }
+    35% {
+        transform: scale(1.028);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Individual Tab inside Full Dock */
+.dynamicIslandTab {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.42rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    transition: color 0.25s ease, transform 0.15s ease;
+}
+
+.dynamicIslandTab:hover {
+    color: var(--foreground);
+}
+
+.dynamicIslandTab:active {
+    transform: scale(0.96);
+}
+
+.dynamicIslandTabActive {
+    font-weight: 600;
+}
+
+.dynamicIslandTabIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease;
+}
+
+.dynamicIslandTab:hover .dynamicIslandTabIcon {
+    transform: scale(1.12);
+}
+
+.dynamicIslandTabIconActive {
+    transform: scale(1.22);
+    animation: iconSpringBounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes iconSpringBounce {
+    0% {
+        transform: scale(0.85);
+    }
+    50% {
+        transform: scale(1.35);
+    }
+    100% {
+        transform: scale(1.22);
+    }
+}
+
+.dynamicIslandTabLabel {
+    font-size: 0.84rem;
+    letter-spacing: -0.2px;
+}
+
+.dynamicIslandTabCount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--muted-foreground);
+    transition: background-color 0.25s ease, color 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:global([data-theme='light']) .dynamicIslandTabCount {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.dynamicIslandTabCountActive {
+    animation: badgeSpringPop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badgeSpringPop {
+    0% {
+        transform: scale(0.8);
+    }
+    50% {
+        transform: scale(1.18);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Glass Divider */
+.dynamicIslandDivider {
+    width: 1px;
+    height: 1.25rem;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0 0.15rem;
+}
+
+:global([data-theme='light']) .dynamicIslandDivider {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Action Buttons (Scroll to Top, Minimize/Expand) */
+.dynamicIslandActionBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.95rem;
+    height: 1.95rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamicIslandActionBtn:hover {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
+}
+
+:global([data-theme='light']) .dynamicIslandActionBtn {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+:global([data-theme='light']) .dynamicIslandActionBtn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Compact Wrapper and Pill (Mobile and Minimized Desktop) */
+.dynamicIslandCompactWrapper {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.dynamicIslandCompact {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(13, 16, 24, 0.88);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 
+        0 18px 38px -8px rgba(0, 0, 0, 0.7),
+        0 4px 14px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:global([data-theme='light']) .dynamicIslandCompact {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    box-shadow: 
+        0 14px 32px -6px rgba(0, 0, 0, 0.12),
+        0 4px 10px rgba(0, 0, 0, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.dynamicIslandCompactTrigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.65rem;
+    background: transparent;
+    border: none;
+    color: var(--foreground);
+    cursor: pointer;
+    font-size: 0.86rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    transition: background 0.2s ease;
+}
+
+.dynamicIslandCompactTrigger:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+:global([data-theme='light']) .dynamicIslandCompactTrigger:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Pulsing Status Dot */
+.dynamicIslandStatusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: islandPulse 2.2s infinite ease-in-out;
+}
+
+@keyframes islandPulse {
+    0%, 100% {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(0.85);
+    }
+}
+
+.dynamicIslandCompactLabel {
+    font-size: 0.86rem;
+    letter-spacing: -0.2px;
+    animation: islandLabelMorph 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes islandLabelMorph {
+    0% {
+        opacity: 0.3;
+        transform: translateY(-4px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dynamicIslandChevron {
+    color: var(--muted-foreground);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    margin-left: 0.15rem;
+}
+
+.dynamicIslandChevronRotated {
+    transform: rotate(180deg);
+}
+
+/* Dropdown Menu (Opened from Compact Mode) */
+.dynamicIslandMenu {
+    position: absolute;
+    top: calc(100% + 8px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.45rem;
+    min-width: 210px;
+    border-radius: 18px;
+    background: rgba(13, 16, 24, 0.92);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 
+        0 24px 48px -10px rgba(0, 0, 0, 0.75),
+        0 8px 20px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    animation: islandMenuEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transform-origin: top center;
+    z-index: 100;
+}
+
+:global([data-theme='light']) .dynamicIslandMenu {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 
+        0 20px 40px -8px rgba(0, 0, 0, 0.15),
+        0 6px 14px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+@keyframes islandMenuEnter {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dynamicIslandMenuItem {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 12px;
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamicIslandMenuItem:hover {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+:global([data-theme='light']) .dynamicIslandMenuItem:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.dynamicIslandMenuItemActive {
+    font-weight: 600;
+}
+
+.dynamicIslandMenuItemLabel {
+    flex: 1;
+    letter-spacing: -0.2px;
 }

@@ -7,7 +7,7 @@ import MediaCard, { MediaItem } from '@/components/MediaCard';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import AddMediaModal from '@/components/AddMediaModal';
 import ImportExportModal from '@/components/ImportExportModal';
-import { Plus, Search, Clapperboard, CalendarClock, CheckCircle, LayoutGrid, List, Layers, ArrowUp, ArrowDown, PauseCircle, XCircle, SlidersHorizontal, ChevronDown, Download, Loader2 } from 'lucide-react';
+import { Plus, Search, Clapperboard, CalendarClock, CheckCircle, LayoutGrid, List, Layers, ArrowUp, ArrowDown, PauseCircle, XCircle, SlidersHorizontal, ChevronDown, ChevronUp, Download, Loader2 } from 'lucide-react';
 import styles from './watchlist.module.css';
 import { STATUS_COLORS, ALL_TAB_CONFIG } from '@/lib/statusColors';
 import GenreFilter from './GenreFilter';
@@ -33,6 +33,16 @@ export default function WatchlistPage() {
     const [showMobileFilters, setShowMobileFilters] = useState(false); // Mobile Filter Toggle
     const [showBackToTop, setShowBackToTop] = useState(false); // Scroll to top visibility
     const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Mobile Custom Dropdown Toggle
+
+    // Dynamic Island Sticky Status Bar State
+    const [isIslandVisible, setIsIslandVisible] = useState(false);
+    const [isIslandMinimized, setIsIslandMinimized] = useState(false);
+    const [isIslandDropdownOpen, setIsIslandDropdownOpen] = useState(false);
+    const [isIslandPulsing, setIsIslandPulsing] = useState(false);
+    const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number; opacity: number }>({ left: 0, width: 0, opacity: 0 });
+    const navBarRef = useRef<HTMLDivElement | null>(null);
+    const islandRef = useRef<HTMLDivElement | null>(null);
+    const tabButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
     // Infinite Scroll / Batch Rendering State (25 items = 5 full rows of 5 cards)
     const [visibleCount, setVisibleCount] = useState(25);
@@ -117,6 +127,13 @@ export default function WatchlistPage() {
 
         // Scroll Listener
         const handleScroll = () => {
+            if (navBarRef.current) {
+                const rect = navBarRef.current.getBoundingClientRect();
+                setIsIslandVisible(rect.bottom < 15);
+            } else {
+                setIsIslandVisible(window.scrollY > 280);
+            }
+
             if (window.scrollY > 300) {
                 setShowBackToTop(true);
             } else {
@@ -128,13 +145,34 @@ export default function WatchlistPage() {
                 setVisibleCount((prev) => prev + 25);
             }
         };
-        window.addEventListener('scroll', handleScroll);
+        handleScroll();
+        window.addEventListener('scroll', handleScroll, { passive: true });
 
         return () => {
             window.removeEventListener('resize', checkMobile);
             window.removeEventListener('scroll', handleScroll);
-        }
+        };
     }, []);
+
+    // Close dynamic island dropdown if island is hidden
+    useEffect(() => {
+        if (!isIslandVisible) {
+            setIsIslandDropdownOpen(false);
+        }
+    }, [isIslandVisible]);
+
+    // Close dynamic island dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (islandRef.current && !islandRef.current.contains(e.target as Node)) {
+                setIsIslandDropdownOpen(false);
+            }
+        };
+        if (isIslandDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isIslandDropdownOpen]);
 
     const handleViewChange = (mode: 'grid' | 'list') => {
         setViewMode(mode);
@@ -380,12 +418,242 @@ export default function WatchlistPage() {
         { id: 'dropped', label: 'Dropped', icon: <XCircle size={16} />, color: STATUS_COLORS.dropped.color }
     ];
 
+    // Smooth status switch with Apple Dynamic Island squish and bloom
+    const handleIslandTabSwitch = (newTabId: string) => {
+        if (newTabId === activeTab) return;
+        setIsIslandPulsing(true);
+        setActiveTab(newTabId);
+        setTimeout(() => {
+            setIsIslandPulsing(false);
+        }, 400);
+    };
 
+    // Track active tab button position to smoothly slide the liquid indicator pill
+    useEffect(() => {
+        const updateIndicator = () => {
+            const activeIndex = tabs.findIndex(t => t.id === activeTab);
+            const activeEl = tabButtonRefs.current[activeIndex];
+            if (activeEl) {
+                setIndicatorStyle({
+                    left: activeEl.offsetLeft,
+                    width: activeEl.offsetWidth,
+                    opacity: 1
+                });
+            }
+        };
+        const id = requestAnimationFrame(updateIndicator);
+        window.addEventListener('resize', updateIndicator);
+        return () => {
+            cancelAnimationFrame(id);
+            window.removeEventListener('resize', updateIndicator);
+        };
+    }, [activeTab, isIslandVisible, isIslandMinimized]);
 
     if (loading) return <WatchlistSkeleton />;
 
     return (
         <div className={styles.container}>
+            {/* Apple Dynamic Island Sticky Status Bar */}
+            <div
+                className={`${styles.dynamicIslandPortal} ${isIslandVisible ? styles.dynamicIslandPortalVisible : ''}`}
+                ref={islandRef}
+                aria-hidden={!isIslandVisible}
+            >
+                {(isMobile || isIslandMinimized) ? (
+                    <div className={styles.dynamicIslandCompactWrapper}>
+                        {(() => {
+                            const activeTabConfig = tabs.find(t => t.id === activeTab);
+                            const tabColor = activeTabConfig?.color || '#0070f3';
+                            return (
+                                <div
+                                    className={`${styles.dynamicIslandCompact} ${isIslandPulsing ? styles.dynamicIslandPulsing : ''}`}
+                                    style={isIslandPulsing ? {
+                                        boxShadow: `0 18px 38px -8px rgba(0, 0, 0, 0.7), 0 0 24px 2px ${tabColor}45, inset 0 1px 0 rgba(255, 255, 255, 0.22)`
+                                    } : undefined}
+                                >
+                                    <button
+                                        type="button"
+                                        className={styles.dynamicIslandCompactTrigger}
+                                        onClick={() => setIsIslandDropdownOpen(!isIslandDropdownOpen)}
+                                        aria-expanded={isIslandDropdownOpen}
+                                        aria-label={`Current status filter: ${activeTabConfig?.label}. Click to switch.`}
+                                    >
+                                        <span
+                                            className={styles.dynamicIslandStatusDot}
+                                            style={{ backgroundColor: tabColor, boxShadow: `0 0 10px ${tabColor}` }}
+                                        />
+                                        <span className={styles.dynamicIslandTabIcon} style={{ color: tabColor }}>
+                                            {activeTabConfig?.icon}
+                                        </span>
+                                        <span key={activeTab} className={styles.dynamicIslandCompactLabel}>
+                                            {activeTabConfig?.label}
+                                        </span>
+                                        <span
+                                            className={styles.dynamicIslandTabCount}
+                                            style={{ backgroundColor: `${tabColor}20`, color: tabColor }}
+                                        >
+                                            {getTabCount(activeTab)}
+                                        </span>
+                                        <ChevronDown
+                                            size={14}
+                                            className={`${styles.dynamicIslandChevron} ${isIslandDropdownOpen ? styles.dynamicIslandChevronRotated : ''}`}
+                                        />
+                                    </button>
+
+                                    <div className={styles.dynamicIslandDivider} />
+
+                                    <button
+                                        type="button"
+                                        className={styles.dynamicIslandActionBtn}
+                                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                        title="Scroll to top"
+                                        aria-label="Scroll to top"
+                                    >
+                                        <ArrowUp size={14} />
+                                    </button>
+
+                                    {!isMobile && (
+                                        <button
+                                            type="button"
+                                            className={styles.dynamicIslandActionBtn}
+                                            onClick={() => setIsIslandMinimized(false)}
+                                            title="Expand status bar"
+                                            aria-label="Expand status bar"
+                                        >
+                                            <ChevronDown size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Dropdown Menu for Compact / Mobile Mode */}
+                        {isIslandDropdownOpen && (
+                            <div className={styles.dynamicIslandMenu}>
+                                {tabs.map((tab) => {
+                                    const isActive = activeTab === tab.id;
+                                    const tabColor = tab.color || '#0070f3';
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            className={`${styles.dynamicIslandMenuItem} ${isActive ? styles.dynamicIslandMenuItemActive : ''}`}
+                                            onClick={() => {
+                                                handleIslandTabSwitch(tab.id);
+                                                setIsIslandDropdownOpen(false);
+                                            }}
+                                            style={isActive ? {
+                                                backgroundColor: `${tabColor}18`,
+                                                color: tabColor,
+                                                borderColor: `${tabColor}35`
+                                            } : undefined}
+                                        >
+                                            <span className={styles.dynamicIslandTabIcon} style={{ color: tabColor }}>
+                                                {tab.icon}
+                                            </span>
+                                            <span className={styles.dynamicIslandMenuItemLabel}>
+                                                {tab.label}
+                                            </span>
+                                            <span
+                                                className={styles.dynamicIslandTabCount}
+                                                style={isActive ? {
+                                                    backgroundColor: `${tabColor}25`,
+                                                    color: tabColor
+                                                } : undefined}
+                                            >
+                                                {getTabCount(tab.id)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                ) : (() => {
+                    const activeTabConfig = tabs.find(t => t.id === activeTab);
+                    const activeColor = activeTabConfig?.color || '#0070f3';
+                    return (
+                            <div
+                                className={`${styles.dynamicIslandFull} ${isIslandPulsing ? styles.dynamicIslandPulsing : ''}`}
+                                style={isIslandPulsing ? {
+                                    boxShadow: `0 20px 42px -8px rgba(0, 0, 0, 0.7), 0 0 32px 3px ${activeColor}45, inset 0 1px 0 rgba(255, 255, 255, 0.22)`
+                                } : undefined}
+                            >
+                                <div className={styles.dynamicIslandTabs}>
+                                    {/* Sliding Liquid Active Indicator Pill */}
+                                    <div
+                                        className={styles.dynamicIslandActiveIndicator}
+                                        style={{
+                                            left: `${indicatorStyle.left}px`,
+                                            width: `${indicatorStyle.width}px`,
+                                            opacity: indicatorStyle.opacity,
+                                            backgroundColor: `${activeColor}1c`,
+                                            borderColor: `${activeColor}40`,
+                                            boxShadow: `0 2px 14px ${activeColor}33, inset 0 1px 0 rgba(255, 255, 255, 0.2)`
+                                        }}
+                                    />
+
+                                    {tabs.map((tab, idx) => {
+                                        const isActive = activeTab === tab.id;
+                                        const tabColor = tab.color || '#0070f3';
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                ref={(el) => { tabButtonRefs.current[idx] = el; }}
+                                                type="button"
+                                                className={`${styles.dynamicIslandTab} ${isActive ? styles.dynamicIslandTabActive : ''}`}
+                                                onClick={() => handleIslandTabSwitch(tab.id)}
+                                                style={isActive ? { color: tabColor } : undefined}
+                                            >
+                                                <span
+                                                    className={`${styles.dynamicIslandTabIcon} ${isActive ? styles.dynamicIslandTabIconActive : ''}`}
+                                                    style={isActive || tabColor ? { color: tabColor } : undefined}
+                                                >
+                                                    {tab.icon}
+                                                </span>
+                                                <span className={styles.dynamicIslandTabLabel}>{tab.label}</span>
+                                                <span
+                                                    className={`${styles.dynamicIslandTabCount} ${isActive ? styles.dynamicIslandTabCountActive : ''}`}
+                                                    style={isActive ? {
+                                                        backgroundColor: `${tabColor}26`,
+                                                        color: tabColor
+                                                    } : undefined}
+                                                >
+                                                    {getTabCount(tab.id)}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className={styles.dynamicIslandDivider} />
+
+                                {/* Scroll to Top */}
+                                <button
+                                    type="button"
+                                    className={styles.dynamicIslandActionBtn}
+                                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                    title="Scroll to top"
+                                    aria-label="Scroll to top"
+                                >
+                                    <ArrowUp size={15} />
+                                </button>
+
+                                {/* Minimize to compact pill */}
+                                <button
+                                    type="button"
+                                    className={styles.dynamicIslandActionBtn}
+                                    onClick={() => setIsIslandMinimized(true)}
+                                    title="Minimize status bar"
+                                    aria-label="Minimize status bar"
+                                >
+                                    <ChevronUp size={15} />
+                                </button>
+                            </div>
+                        );
+                    })()}
+            </div>
+
             <div className={styles.header}>
                 <div>
                     <h1 className={styles.pageTitle}>My Watchlist</h1>
@@ -404,9 +672,8 @@ export default function WatchlistPage() {
             {/* Release Radar Story Reel */}
             <ReleaseReel onWatchlistUpdated={fetchWatchlist} />
 
-            {/* Navigation Tabs */}
             {/* Navigation Tabs (Desktop) & Dropdown (Mobile) */}
-            <div className={styles.navBar}>
+            <div className={styles.navBar} ref={navBarRef}>
                 {/* Mobile Custom Dropdown - REPLACES <select> */}
                 {isMobile ? (
                     <div className={styles.customDropdownContainer}>
@@ -621,7 +888,7 @@ export default function WatchlistPage() {
 
             {filteredItems.length > 0 ? (
                 <>
-                    <div className={viewMode === 'grid' ? styles.watchlistGrid : styles.watchlistList}>
+                    <div key={activeTab} className={viewMode === 'grid' ? styles.watchlistGrid : styles.watchlistList}>
                         {displayedItems.map(item => (
                             <div key={item.dbId} style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0 }}>
                                 <MediaCard
