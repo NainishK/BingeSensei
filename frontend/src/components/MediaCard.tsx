@@ -60,7 +60,6 @@ export default function MediaCard({
     onRemove,
     onStatusChange,
     hideOverview,
-    customBadgeColor,
     aiReason,
     layout = 'grid',
     onFollowChange
@@ -154,8 +153,8 @@ export default function MediaCard({
         }
     };
 
-    const handleToggleFollow = async (e: React.MouseEvent) => {
-        e.stopPropagation();
+    const handleToggleFollow = async (e?: React.MouseEvent) => {
+        e?.stopPropagation();
         if (!dbId) return;
         const nextVal = !isFollowed;
         setIsFollowed(nextVal);
@@ -188,6 +187,7 @@ export default function MediaCard({
             setAdded(true);
             onAddSuccess?.();
             setTimeout(() => setAdded(false), 3000);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
             console.error('Failed to add to watchlist', error);
             if (error.response?.status === 401) {
@@ -222,7 +222,11 @@ export default function MediaCard({
 
         if (dbId) {
             try {
-                await api.put(`/watchlist/${dbId}/status?status=${newStatus}`);
+                const res = await api.put(`/watchlist/${dbId}/status?status=${newStatus}`);
+                if (res.data && typeof res.data.is_followed === 'boolean') {
+                    setIsFollowed(res.data.is_followed);
+                    onFollowChange?.(res.data.is_followed);
+                }
                 onStatusChange?.(newStatus);
             } catch (err) {
                 console.error("Failed to update status", err);
@@ -234,7 +238,6 @@ export default function MediaCard({
         }
     };
 
-    const tmdbLink = `https://www.themoviedb.org/${item.media_type}/${item.id}`;
     const posterUrl = item.poster_path
         ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
         : null;
@@ -280,6 +283,7 @@ export default function MediaCard({
                     style={{ cursor: 'pointer' }}
                 >
                     {posterUrl ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img src={posterUrl} alt={item.title || item.name} className={styles.posterImage} />
                     ) : (
                         <div style={{ width: '100%', height: '100%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
@@ -323,6 +327,18 @@ export default function MediaCard({
                         <div className={styles.serviceBadge}>
                             <Check size={12} /> {showServiceBadge}
                         </div>
+                    )}
+
+                    {dbId && item.media_type === 'tv' && (
+                        <button
+                            type="button"
+                            onClick={handleToggleFollow}
+                            className={`${styles.posterRadarBtn} ${isFollowed ? styles.posterRadarActive : styles.posterRadarInactive}`}
+                            title={isFollowed ? "Tracking releases (Radar ON)" : "Follow for release drops (Radar OFF)"}
+                            aria-label={isFollowed ? "Radar tracking active" : "Enable radar tracking"}
+                        >
+                            <Zap size={14} className={isFollowed ? styles.zapActive : ''} />
+                        </button>
                     )}
                 </div>
 
@@ -460,16 +476,6 @@ export default function MediaCard({
                             />
                         </div>
 
-                        {dbId && item.media_type === 'tv' && (
-                            <button
-                                onClick={handleToggleFollow}
-                                className={`${styles.actionBtn} ${isFollowed ? styles.btnFollowActive : styles.btnFollowInactive}`}
-                                title={isFollowed ? "Tracking releases (Radar ON)" : "Follow for release drops (Radar OFF)"}
-                            >
-                                <Zap size={15} className={isFollowed ? styles.zapActive : ''} />
-                            </button>
-                        )}
-
                         {onRemove ? (
                             <button
                                 onClick={onRemove}
@@ -514,7 +520,7 @@ export default function MediaCard({
                 notes={notes}
                 onNotesChange={dbId ? handleNotesChange : undefined}
                 isFollowed={isFollowed}
-                onToggleFollow={dbId && item.media_type === 'tv' ? () => handleToggleFollow({ stopPropagation: () => {} } as any) : undefined}
+                onToggleFollow={dbId && item.media_type === 'tv' ? () => handleToggleFollow() : undefined}
             />
         </>
     );

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import styles from './profile.module.css';
 import {
     ArrowLeft, CheckCircle, AlertCircle, Save, Download,
-    User, Settings, Users, Clock, Globe, Monitor, Ban
+    User, Settings, Users, Clock, Globe, Monitor, Ban, Radio, Bell, Wallet
 } from 'lucide-react';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import ImportExportModal from '@/components/ImportExportModal';
@@ -31,7 +31,13 @@ interface UserPreferences {
     viewing_style?: string;
     devices?: string[];
     deal_breakers?: string[];
-    [key: string]: any;
+    enable_email_renewals?: boolean;
+    notify_season_drops_only?: boolean;
+    notify_watched_resurrect?: boolean;
+    notify_movie_streaming?: boolean;
+    auto_follow_watching?: boolean;
+    viewing_preference?: 'weekly' | 'binge';
+    [key: string]: unknown;
 }
 
 const LANG_OPTIONS   = ['English', 'Spanish', 'French', 'German', 'Japanese', 'Korean', 'Hindi', 'Mandarin', 'Italian'];
@@ -55,6 +61,11 @@ export default function Profile() {
         devices: [],
         deal_breakers: [],
         languages: [],
+        notify_season_drops_only: false,
+        notify_watched_resurrect: true,
+        notify_movie_streaming: true,
+        auto_follow_watching: true,
+        viewing_preference: 'weekly',
     });
     const [savingPrefs, setSavingPrefs] = useState(false);
     const [prefsMessage, setPrefsMessage] = useState('');
@@ -63,7 +74,9 @@ export default function Profile() {
     try {
         const ctx = useRecommendations();
         refreshRecommendations = ctx.refreshRecommendations;
-    } catch (_) {}
+    } catch {
+        // Context might not be available
+    }
 
     useEffect(() => { fetchProfile(); }, []);
 
@@ -78,8 +91,19 @@ export default function Profile() {
                     if (!parsed.target_currency && res.data.country) {
                         parsed.target_currency = COUNTRY_CURRENCY_MAP[res.data.country] || 'USD';
                     }
+                    if (parsed.notify_season_drops_only === undefined) parsed.notify_season_drops_only = false;
+                    if (parsed.notify_watched_resurrect === undefined) parsed.notify_watched_resurrect = true;
+                    if (parsed.notify_movie_streaming === undefined) parsed.notify_movie_streaming = true;
+                    if (parsed.auto_follow_watching === undefined) parsed.auto_follow_watching = true;
+                    if (parsed.viewing_style === 'Binge Watcher') {
+                        parsed.viewing_preference = 'binge';
+                    } else if (!parsed.viewing_preference) {
+                        parsed.viewing_preference = 'weekly';
+                    }
                     setPreferences(prev => ({ ...prev, ...parsed }));
-                } catch (_) {}
+                } catch {
+                    // Ignore JSON parse errors
+                }
             }
         } catch (err) {
             console.error('Failed to fetch profile', err);
@@ -104,7 +128,7 @@ export default function Profile() {
             setTimeout(() => setMessage(''), 3000);
             if (user) setUser({ ...user, country });
             refreshRecommendations?.(true).catch(() => {});
-        } catch (_) {
+        } catch {
             setMessage('Failed to save settings.');
         } finally {
             setSaving(false);
@@ -116,9 +140,11 @@ export default function Profile() {
         setPrefsMessage('');
         try {
             await api.put('/users/me/preferences', preferences);
+            // Invalidate activity drops and watchlist cache so changes reflect immediately
+            localStorage.removeItem('binge_watchlist_cache');
             setPrefsMessage('Preferences saved!');
             setTimeout(() => setPrefsMessage(''), 3000);
-        } catch (_) {
+        } catch {
             setPrefsMessage('Failed to save preferences.');
         } finally {
             setSavingPrefs(false);
@@ -140,8 +166,9 @@ export default function Profile() {
             await api.post('/auth/disconnect/google');
             setMessage('Google account disconnected.');
             if (user) setUser({ ...user, google_id: null });
-        } catch (err: any) {
-            setMessage('Failed: ' + (err.response?.data?.detail || 'Could not disconnect.'));
+        } catch (err: unknown) {
+            const errorDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+            setMessage('Failed: ' + (errorDetail || 'Could not disconnect.'));
         }
     };
 
@@ -280,7 +307,10 @@ export default function Profile() {
                                 {/* Household + Style */}
                                 <div className={styles.twoCol}>
                                     <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
-                                        <label className={styles.label}><Users size={13} />Household</label>
+                                        <label className={styles.label}>
+                                            <span className={styles.iconHousehold}><Users size={14} /></span>
+                                            Household
+                                        </label>
                                         <CustomSelect
                                             value={preferences.household_size || 'Solo'}
                                             options={[
@@ -293,11 +323,21 @@ export default function Profile() {
                                         />
                                     </div>
                                     <div className={styles.inputGroup} style={{ marginBottom: 0 }}>
-                                        <label className={styles.label}><Clock size={13} />Viewing Style</label>
+                                        <label className={styles.label}>
+                                            <span className={styles.iconStyle}><Clock size={14} /></span>
+                                            Viewing Style
+                                        </label>
                                         <CustomSelect
                                             value={preferences.viewing_style || 'Casual'}
                                             options={STYLE_OPTIONS.map(opt => ({ value: opt, label: opt }))}
-                                            onChange={(val) => setPreferences({ ...preferences, viewing_style: val as string })}
+                                            onChange={(val) => {
+                                                const styleVal = val as string;
+                                                setPreferences({
+                                                    ...preferences,
+                                                    viewing_style: styleVal,
+                                                    viewing_preference: styleVal === 'Binge Watcher' ? 'binge' : 'weekly'
+                                                });
+                                            }}
                                             className={styles.select}
                                         />
                                     </div>
@@ -305,7 +345,10 @@ export default function Profile() {
 
                                 {/* Budget */}
                                 <div className={styles.inputGroup}>
-                                    <label className={styles.label}>Monthly Budget ({currencySymbol})</label>
+                                    <label className={styles.label}>
+                                        <span className={styles.iconBudget}><Wallet size={14} /></span>
+                                        Monthly Budget ({currencySymbol})
+                                    </label>
                                     <input
                                         type="number"
                                         className={styles.select}
@@ -318,7 +361,10 @@ export default function Profile() {
 
                                 {/* Languages */}
                                 <div className={styles.inputGroup}>
-                                    <label className={styles.label}><Globe size={13} />Preferred Languages</label>
+                                    <label className={styles.label}>
+                                        <span className={styles.iconLanguages}><Globe size={14} /></span>
+                                        Preferred Languages
+                                    </label>
                                     <div className={styles.pillRow}>
                                         {LANG_OPTIONS.map(lang => (
                                             <button
@@ -333,7 +379,10 @@ export default function Profile() {
 
                                 {/* Devices */}
                                 <div className={styles.inputGroup}>
-                                    <label className={styles.label}><Monitor size={13} />Primary Devices</label>
+                                    <label className={styles.label}>
+                                        <span className={styles.iconDevices}><Monitor size={14} /></span>
+                                        Primary Devices
+                                    </label>
                                     <div className={styles.pillRow}>
                                         {DEVICE_OPTIONS.map(dev => (
                                             <button
@@ -348,7 +397,10 @@ export default function Profile() {
 
                                 {/* Deal Breakers */}
                                 <div className={styles.inputGroup}>
-                                    <label className={styles.label}><Ban size={13} />Deal Breakers</label>
+                                    <label className={styles.label}>
+                                        <span className={styles.iconDealBreakers}><Ban size={14} /></span>
+                                        Deal Breakers
+                                    </label>
                                     <input
                                         type="text"
                                         className={styles.select}
@@ -359,70 +411,160 @@ export default function Profile() {
                                     <p className={styles.helperText}>Genres or content types you never want recommended.</p>
                                 </div>
 
+                                {/* Release Radar & Drop Preferences */}
+                                <div className={styles.settingsSection}>
+                                    <div className={styles.settingsSectionHeader}>
+                                        <h3 className={styles.settingsSectionTitle}>
+                                            <span className={styles.radarIconAccent}><Radio size={16} /></span>
+                                            Release Radar & Content Drops
+                                        </h3>
+                                        <p className={styles.settingsSectionDesc}>
+                                            Customize what drops appear on your Release Radar and Calendar schedule.
+                                        </p>
+                                    </div>
+
+                                    {/* Switch Toggles */}
+                                    <div className={styles.switchGroup}>
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Season Premieres Only</span>
+                                                <span className={styles.switchDescription}>
+                                                    Only alert on full season drops, skipping weekly episode notifications.
+                                                </span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${preferences.notify_season_drops_only ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.notify_season_drops_only || false}
+                                                    onChange={e => setPreferences({ ...preferences, notify_season_drops_only: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
+                                            </div>
+                                        </label>
+
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Watched Show Resurrections</span>
+                                                <span className={styles.switchDescription}>
+                                                    Alert when a show marked as Watched premieres a new season.
+                                                </span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${(preferences.notify_watched_resurrect ?? true) ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.notify_watched_resurrect ?? true}
+                                                    onChange={e => setPreferences({ ...preferences, notify_watched_resurrect: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
+                                            </div>
+                                        </label>
+
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Movie Streaming Availability</span>
+                                                <span className={styles.switchDescription}>
+                                                    Alert when a movie in Plan to Watch becomes available on your active subscriptions.
+                                                </span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${(preferences.notify_movie_streaming ?? true) ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.notify_movie_streaming ?? true}
+                                                    onChange={e => setPreferences({ ...preferences, notify_movie_streaming: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
+                                            </div>
+                                        </label>
+
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Auto-Track Watching Shows</span>
+                                                <span className={styles.switchDescription}>
+                                                    Automatically turn Radar ON when a show is moved to Watching.
+                                                </span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${(preferences.auto_follow_watching ?? true) ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.auto_follow_watching ?? true}
+                                                    onChange={e => setPreferences({ ...preferences, auto_follow_watching: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
                                 {/* Notification Settings */}
-                                <div className={styles.inputGroup} style={{ marginTop: '2rem' }}>
-                                    <label className={styles.label}>Notification Settings</label>
-                                    <p className={styles.helperText} style={{ marginBottom: '1rem' }}>
-                                        Toggle how and when you want to receive alerts about your subscriptions.
-                                    </p>
-                                    <div className={styles.checkboxGroup}>
-                                        <label className={styles.checkboxLabel}>
-                                            <input
-                                                type="checkbox"
-                                                checked={preferences.enable_email_renewals || false}
-                                                onChange={e => setPreferences({ ...preferences, enable_email_renewals: e.target.checked })}
-                                                className={styles.checkboxInput}
-                                            />
-                                            <div className={styles.checkboxTextWrapper}>
-                                                <span className={styles.checkboxTitle}>Email: Renewal Reminders</span>
-                                                <span className={styles.checkboxDescription}>Receive consolidated emails 7 days and 1 day before your subscriptions renew.</span>
+                                <div className={styles.settingsSection}>
+                                    <div className={styles.settingsSectionHeader}>
+                                        <h3 className={styles.settingsSectionTitle}>
+                                            <span className={styles.notificationIconAccent}><Bell size={16} /></span>
+                                            Notification Settings
+                                        </h3>
+                                        <p className={styles.settingsSectionDesc}>
+                                            Toggle how and when you want to receive alerts about your subscriptions.
+                                        </p>
+                                    </div>
+                                    <div className={styles.switchGroup}>
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Email: Renewal Reminders</span>
+                                                <span className={styles.switchDescription}>Receive consolidated emails 7 days and 1 day before your subscriptions renew.</span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${preferences.enable_email_renewals ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.enable_email_renewals || false}
+                                                    onChange={e => setPreferences({ ...preferences, enable_email_renewals: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
                                             </div>
                                         </label>
 
-                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={false}
-                                                disabled
-                                                className={styles.checkboxInput}
-                                            />
-                                            <div className={styles.checkboxTextWrapper}>
-                                                <span className={styles.checkboxTitle}>
-                                                    Email: AI Strategy & Insights <span className={styles.comingSoonBadge}>Coming Soon</span>
-                                                </span>
-                                                <span className={styles.checkboxDescription}>Receive monthly email reports with smart budget strategies and recommendations.</span>
-                                            </div>
-                                        </label>
+                                        {/* Coming Soon notification options preserved in code but hidden from UI per user request */}
+                                        <div style={{ display: 'none' }} aria-hidden="true">
+                                            <label className={`${styles.switchRow} ${styles.switchRowDisabled}`}>
+                                                <div className={styles.switchTextWrapper}>
+                                                    <span className={styles.switchTitle}>
+                                                        Email: AI Strategy & Insights <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                    </span>
+                                                    <span className={styles.switchDescription}>Receive monthly email reports with smart budget strategies and recommendations.</span>
+                                                </div>
+                                                <div className={styles.switchTrack}>
+                                                    <span className={styles.switchThumb} />
+                                                </div>
+                                            </label>
 
-                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={false}
-                                                disabled
-                                                className={styles.checkboxInput}
-                                            />
-                                            <div className={styles.checkboxTextWrapper}>
-                                                <span className={styles.checkboxTitle}>
-                                                    Push: Renewal Reminders <span className={styles.comingSoonBadge}>Coming Soon</span>
-                                                </span>
-                                                <span className={styles.checkboxDescription}>Receive browser/mobile push notifications when a service is renewing soon.</span>
-                                            </div>
-                                        </label>
+                                            <label className={`${styles.switchRow} ${styles.switchRowDisabled}`}>
+                                                <div className={styles.switchTextWrapper}>
+                                                    <span className={styles.switchTitle}>
+                                                        Push: Renewal Reminders <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                    </span>
+                                                    <span className={styles.switchDescription}>Receive browser/mobile push notifications when a service is renewing soon.</span>
+                                                </div>
+                                                <div className={styles.switchTrack}>
+                                                    <span className={styles.switchThumb} />
+                                                </div>
+                                            </label>
 
-                                        <label className={`${styles.checkboxLabel} ${styles.checkboxLabelDisabled}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={false}
-                                                disabled
-                                                className={styles.checkboxInput}
-                                            />
-                                            <div className={styles.checkboxTextWrapper}>
-                                                <span className={styles.checkboxTitle}>
-                                                    Push: AI Recommendations <span className={styles.comingSoonBadge}>Coming Soon</span>
-                                                </span>
-                                                <span className={styles.checkboxDescription}>Get notified immediately when new curator picks or deals are found for your library.</span>
-                                            </div>
-                                        </label>
+                                            <label className={`${styles.switchRow} ${styles.switchRowDisabled}`}>
+                                                <div className={styles.switchTextWrapper}>
+                                                    <span className={styles.switchTitle}>
+                                                        Push: AI Recommendations <span className={styles.comingSoonBadge}>Coming Soon</span>
+                                                    </span>
+                                                    <span className={styles.switchDescription}>Get notified immediately when new curator picks or deals are found for your library.</span>
+                                                </div>
+                                                <div className={styles.switchTrack}>
+                                                    <span className={styles.switchThumb} />
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

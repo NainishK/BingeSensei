@@ -100,9 +100,10 @@ class WatchlistItem(WatchlistItemBase):
 # --- RADAR & CALENDAR SCHEMAS ---
 
 class UserRadarSettings(BaseModel):
-    notify_season_drops_only: bool = True
+    notify_season_drops_only: bool = False
     notify_watched_resurrect: bool = True
     notify_movie_streaming: bool = True
+    auto_follow_watching: bool = True
     viewing_preference: str = "weekly" # "weekly" or "binge"
 
 class ActivityDrop(BaseModel):
@@ -203,6 +204,13 @@ class UserPreferences(BaseModel):
     enable_email_insights: Optional[bool] = False
     enable_push_renewals: Optional[bool] = False
     enable_push_insights: Optional[bool] = False
+
+    # Release Radar & Drop Preferences
+    notify_season_drops_only: Optional[bool] = False
+    notify_watched_resurrect: Optional[bool] = True
+    notify_movie_streaming: Optional[bool] = True
+    auto_follow_watching: Optional[bool] = True
+    viewing_preference: Optional[str] = "weekly"
 
     class Config:
         extra = "allow"

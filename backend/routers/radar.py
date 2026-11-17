@@ -98,11 +98,17 @@ def get_user_radar_settings(user: models.User) -> schemas.UserRadarSettings:
             prefs = json.loads(user.preferences)
         except Exception:
             prefs = {}
+
+    viewing_pref = "weekly"
+    if prefs.get("viewing_style") == "Binge Watcher" or prefs.get("viewing_preference") == "binge":
+        viewing_pref = "binge"
+
     return schemas.UserRadarSettings(
-        notify_season_drops_only=prefs.get("notify_season_drops_only", True),
+        notify_season_drops_only=prefs.get("notify_season_drops_only", False),
         notify_watched_resurrect=prefs.get("notify_watched_resurrect", True),
         notify_movie_streaming=prefs.get("notify_movie_streaming", True),
-        viewing_preference=prefs.get("viewing_preference", "weekly")
+        auto_follow_watching=prefs.get("auto_follow_watching", True),
+        viewing_preference=viewing_pref
     )
 
 # --- ENDPOINTS ---
@@ -135,6 +141,8 @@ def get_activity_drops(
         models.WatchlistItem.user_id == current_user.id
     ).all()
 
+    radar_settings = get_user_radar_settings(current_user)
+
     fresh_drops: list[schemas.ActivityDrop] = []
     imminent_drops: list[schemas.ActivityDrop] = []
     resurrected_shows: list[schemas.ActivityDrop] = []
@@ -146,7 +154,7 @@ def get_activity_drops(
         is_sub_match = is_provider_in_subs(item.available_on, active_services)
 
         # 1. Resurrected Shows: Marked 'watched', but a brand-new season has since premiered!
-        if item.media_type == "tv" and item.status == "watched":
+        if radar_settings.notify_watched_resurrect and item.media_type == "tv" and item.status == "watched":
             # Never resurrect shows that have permanently ended or been canceled
             if item.air_status in ["Ended", "Canceled"]:
                 continue
@@ -200,76 +208,106 @@ def get_activity_drops(
                     seen_reel_ids.add(item.id)
 
         # 2. Fresh & Imminent drops (for followed or watching items)
-        if item.media_type == "tv" and (item.is_followed or item.status == "watching"):
+        is_tracked = bool(item.is_followed) or (radar_settings.auto_follow_watching and item.status == "watching")
+        if item.media_type == "tv" and is_tracked:
             # Fresh drops: last air date in past 14 days
             if item.last_air_date:
                 diff_days = (item.last_air_date - today).days
                 if -14 <= diff_days <= 0:
                     is_season_premiere = (item.last_episode_number == 1)
-                    drop_type = "new_season" if is_season_premiere else "new_episode"
-                    drop = schemas.ActivityDrop(
-                        item_id=item.id,
-                        tmdb_id=item.tmdb_id,
-                        title=item.title,
-                        media_type=item.media_type,
-                        poster_path=item.poster_path,
-                        available_on=item.available_on,
-                        is_on_active_subscription=is_sub_match,
-                        drop_type=drop_type,
-                        season_number=item.last_episode_season,
-                        episode_number=item.last_episode_number,
-                        episode_name=item.last_episode_name,
-                        episode_still=item.last_episode_still,
-                        air_date=item.last_air_date,
-                        days_relative=diff_days,
-                        status=item.status,
-                        current_season=item.current_season,
-                        current_episode=item.current_episode,
-                        is_followed=bool(item.is_followed)
-                    )
-                    fresh_drops.append(drop)
-                    if -7 <= diff_days <= 0 and item.id not in seen_reel_ids:
-                        reel_items.append(drop)
-                        seen_reel_ids.add(item.id)
+                    if not radar_settings.notify_season_drops_only or is_season_premiere:
+                        drop_type = "new_season" if is_season_premiere else "new_episode"
+                        drop = schemas.ActivityDrop(
+                            item_id=item.id,
+                            tmdb_id=item.tmdb_id,
+                            title=item.title,
+                            media_type=item.media_type,
+                            poster_path=item.poster_path,
+                            available_on=item.available_on,
+                            is_on_active_subscription=is_sub_match,
+                            drop_type=drop_type,
+                            season_number=item.last_episode_season,
+                            episode_number=item.last_episode_number,
+                            episode_name=item.last_episode_name,
+                            episode_still=item.last_episode_still,
+                            air_date=item.last_air_date,
+                            days_relative=diff_days,
+                            status=item.status,
+                            current_season=item.current_season,
+                            current_episode=item.current_episode,
+                            is_followed=bool(item.is_followed)
+                        )
+                        fresh_drops.append(drop)
+                        if -7 <= diff_days <= 0 and item.id not in seen_reel_ids:
+                            reel_items.append(drop)
+                            seen_reel_ids.add(item.id)
 
             # Imminent drops: next air date in next 14 days
             if item.next_air_date:
                 diff_days = (item.next_air_date - today).days
                 if 0 <= diff_days <= 14:
                     is_season_premiere = (item.next_episode_number == 1)
-                    drop_type = "new_season" if is_season_premiere else "upcoming"
-                    drop = schemas.ActivityDrop(
-                        item_id=item.id,
-                        tmdb_id=item.tmdb_id,
-                        title=item.title,
-                        media_type=item.media_type,
-                        poster_path=item.poster_path,
-                        available_on=item.available_on,
-                        is_on_active_subscription=is_sub_match,
-                        drop_type=drop_type,
-                        season_number=item.next_episode_season,
-                        episode_number=item.next_episode_number,
-                        episode_name=item.next_episode_name,
-                        air_date=item.next_air_date,
-                        days_relative=diff_days,
-                        status=item.status,
-                        current_season=item.current_season,
-                        current_episode=item.current_episode,
-                        is_followed=bool(item.is_followed)
-                    )
-                    imminent_drops.append(drop)
-                    if 0 <= diff_days <= 2 and item.id not in seen_reel_ids:
-                        reel_items.append(drop)
-                        seen_reel_ids.add(item.id)
+                    if not radar_settings.notify_season_drops_only or is_season_premiere:
+                        drop_type = "new_season" if is_season_premiere else "upcoming"
+                        drop = schemas.ActivityDrop(
+                            item_id=item.id,
+                            tmdb_id=item.tmdb_id,
+                            title=item.title,
+                            media_type=item.media_type,
+                            poster_path=item.poster_path,
+                            available_on=item.available_on,
+                            is_on_active_subscription=is_sub_match,
+                            drop_type=drop_type,
+                            season_number=item.next_episode_season,
+                            episode_number=item.next_episode_number,
+                            episode_name=item.next_episode_name,
+                            air_date=item.next_air_date,
+                            days_relative=diff_days,
+                            status=item.status,
+                            current_season=item.current_season,
+                            current_episode=item.current_episode,
+                            is_followed=bool(item.is_followed)
+                        )
+                        imminent_drops.append(drop)
+                        if 0 <= diff_days <= 2 and item.id not in seen_reel_ids:
+                            reel_items.append(drop)
+                            seen_reel_ids.add(item.id)
+
+        # 3. Movie Streaming Drop (Plan to Watch movie available on active subscription)
+        if radar_settings.notify_movie_streaming and item.media_type == "movie" and item.status == "plan_to_watch" and is_sub_match:
+            added_days = (today - item.added_at.date()).days if item.added_at else 0
+            if 0 <= added_days <= 14:
+                drop = schemas.ActivityDrop(
+                    item_id=item.id,
+                    tmdb_id=item.tmdb_id,
+                    title=item.title,
+                    media_type="movie",
+                    poster_path=item.poster_path,
+                    available_on=item.available_on,
+                    is_on_active_subscription=True,
+                    drop_type="new_season",
+                    season_number=1,
+                    episode_name=f"Streaming on {item.available_on}",
+                    air_date=item.added_at.date() if item.added_at else today,
+                    days_relative=-added_days,
+                    status=item.status,
+                    is_followed=bool(item.is_followed)
+                )
+                fresh_drops.append(drop)
+                if added_days <= 7 and item.id not in seen_reel_ids:
+                    reel_items.append(drop)
+                    seen_reel_ids.add(item.id)
 
     # Sort reel items by urgency: 0 (today) first, then upcoming, then recent past
+    # Binge watchers have full season premiere / resurrected drops prioritized first
     def reel_sort_key(d: schemas.ActivityDrop):
         rel = d.days_relative if d.days_relative is not None else 999
+        is_season_priority = 0 if (radar_settings.viewing_preference == "binge" and d.drop_type in ["new_season", "resurrected"]) else 1
         if rel == 0:
-            return (0, 0) # Today!
+            return (is_season_priority, 0, 0) # Today!
         if rel > 0:
-            return (1, rel) # Upcoming in 1-2 days
-        return (2, abs(rel)) # Past days
+            return (is_season_priority, 1, rel) # Upcoming in 1-2 days
+        return (is_season_priority, 2, abs(rel)) # Past days
 
     reel_items.sort(key=reel_sort_key)
     fresh_drops.sort(key=lambda d: d.days_relative if d.days_relative is not None else -999, reverse=True)
@@ -294,6 +332,7 @@ def get_calendar(
     Get full calendar schedule and Subscription Heatmap for the requested month.
     """
     background_tasks.add_task(sync_user_radar, db, current_user.id, False)
+    radar_settings = get_user_radar_settings(current_user)
     today = date.today()
     target_country = (country or current_user.country or "US").upper().strip()
     if not month:
@@ -425,14 +464,18 @@ def get_calendar(
             label = "High Value"
             action = "Keep Active: Great content drop volume this month."
         elif drops_cnt >= 2:
-            label = "Moderate Value"
-            action = "Keep Active: Steady weekly releases."
+            if radar_settings.viewing_preference == "binge" and not is_yearly:
+                label = "Binge Window"
+                action = f"Binge Strategy: {drops_cnt} episodic drops airing. Safe to pause and binge when complete."
+            else:
+                label = "Moderate Value"
+                action = "Keep Active: Steady weekly releases."
         elif drops_cnt == 1:
             label = "Low Value"
             if is_yearly:
                 action = f"Annual plan active: Light drop schedule this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
             else:
-                action = "Consider Binge Window: pause now & binge when season concludes."
+                action = "Consider Binge Window: pause now and binge when season concludes."
         else:
             label = "Idle / Safe to Pause"
             if is_yearly:

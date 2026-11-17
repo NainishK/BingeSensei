@@ -15,7 +15,7 @@ export interface ActivityDrop {
     poster_path?: string;
     available_on?: string;
     is_on_active_subscription: boolean;
-    drop_type: 'new_season' | 'new_episode' | 'upcoming' | 'resurrected';
+    drop_type: 'new_season' | 'new_episode' | 'upcoming' | 'resurrected' | 'movie_streaming';
     season_number?: number;
     episode_number?: number;
     episode_name?: string;
@@ -129,6 +129,9 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
     const formatRelativeText = (drop: ActivityDrop) => {
         if (drop.drop_type === 'resurrected') {
             return `Season ${drop.season_number || 2} Dropped`;
+        }
+        if (drop.drop_type === 'movie_streaming') {
+            return 'Now Streaming';
         }
         const days = drop.days_relative ?? 0;
         if (days === 0) return '🔥 Drops Today';
@@ -309,9 +312,15 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
 
                             <h3 className={styles.modalShowTitle}>{selectedDrop.title}</h3>
                             <div className={styles.modalEpTitle}>
-                                Season {selectedDrop.season_number || 1}
-                                {selectedDrop.episode_number ? ` · Episode ${selectedDrop.episode_number}` : ''}
-                                {selectedDrop.episode_name ? `: "${selectedDrop.episode_name}"` : ''}
+                                {selectedDrop.media_type === 'movie' ? (
+                                    'Feature Film · Now Available to Stream'
+                                ) : (
+                                    <>
+                                        Season {selectedDrop.season_number || 1}
+                                        {selectedDrop.episode_number ? ` · Episode ${selectedDrop.episode_number}` : ''}
+                                        {selectedDrop.episode_name ? `: "${selectedDrop.episode_name}"` : ''}
+                                    </>
+                                )}
                             </div>
 
                             <div className={styles.modalMetaRow}>

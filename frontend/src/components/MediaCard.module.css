@@ -180,7 +180,7 @@
 .actions {
     margin-top: auto;
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: center;
 }
 
@@ -201,7 +201,7 @@
 
 .statusCustomSelect button {
     width: 100%;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.65rem;
     border: 1px solid var(--border);
     border-radius: 8px;
     font-size: 0.825rem;
@@ -304,6 +304,78 @@
 .zapActive {
     fill: #f59e0b;
     filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.5));
+}
+
+/* Poster Floating Radar Button */
+.posterRadarBtn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.posterRadarActive {
+    background: rgba(245, 158, 11, 0.25);
+    border: 1.5px solid #f59e0b;
+    color: #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.posterRadarActive:hover {
+    background: rgba(245, 158, 11, 0.4);
+    border-color: #fbbf24;
+    transform: scale(1.1);
+}
+
+.posterRadarInactive {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #a1a1aa;
+}
+
+.posterRadarInactive:hover {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.5);
+    transform: scale(1.1);
+}
+
+:global([data-theme='light']) .posterRadarInactive {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #64748b;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+:global([data-theme='light']) .posterRadarInactive:hover {
+    background: #ffffff;
+    color: #d97706;
+    border-color: #f59e0b;
+}
+
+:global([data-theme='light']) .posterRadarActive {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1.5px solid #f59e0b;
+    color: #d97706;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.35), 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.cardList .posterRadarBtn {
+    transform: scale(0.85);
+    transform-origin: bottom right;
+    bottom: 6px;
+    right: 6px;
 }
 
 .toggleBtn {

@@ -504,3 +504,215 @@ input[type='text'].select:focus {
 :global([data-theme='dark']) .checkboxLabelDisabled:hover {
     background: rgba(255, 255, 255, 0.02) !important;
 }
+
+/* ── Preference Label Icon Accents ── */
+.iconHousehold {
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconHousehold {
+    color: #38bdf8;
+}
+
+.iconStyle {
+    color: #7c3aed;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconStyle {
+    color: #a78bfa;
+}
+
+.iconBudget {
+    color: #059669;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconBudget {
+    color: #34d399;
+}
+
+.iconLanguages {
+    color: #2563eb;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconLanguages {
+    color: #60a5fa;
+}
+
+.iconDevices {
+    color: #9333ea;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconDevices {
+    color: #c084fc;
+}
+
+.iconDealBreakers {
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+}
+:global([data-theme='dark']) .iconDealBreakers {
+    color: #f87171;
+}
+
+/* ── Section Dividers & Headings ── */
+.settingsSection {
+    margin-top: 2.25rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+}
+
+.settingsSectionHeader {
+    margin-bottom: 1.15rem;
+}
+
+.settingsSectionTitle {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--foreground);
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.35rem 0;
+}
+
+.radarIconAccent {
+    color: #f59e0b;
+    display: flex;
+    align-items: center;
+}
+
+.notificationIconAccent {
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+}
+
+.settingsSectionDesc {
+    font-size: 0.8rem;
+    color: var(--muted-foreground);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ── Modern Switch Toggle Rows ── */
+.switchGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.switchRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+:global([data-theme='dark']) .switchRow {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.switchRow:hover {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.02);
+}
+
+:global([data-theme='dark']) .switchRow:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.switchRowDisabled {
+    opacity: 0.55;
+    cursor: not-allowed !important;
+}
+
+.switchRowDisabled:hover {
+    border-color: var(--border) !important;
+    background: var(--muted) !important;
+}
+
+:global([data-theme='dark']) .switchRowDisabled:hover {
+    background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.switchTextWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+
+.switchTitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.switchDescription {
+    font-size: 0.78rem;
+    color: var(--muted-foreground);
+    line-height: 1.4;
+}
+
+/* Switch Track and Thumb */
+.switchTrack {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: #cbd5e1;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    transition: background-color 0.22s ease;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+}
+
+:global([data-theme='dark']) .switchTrack {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.switchTrackActive {
+    background: #6366f1;
+}
+
+:global([data-theme='dark']) .switchTrackActive {
+    background: #6366f1;
+}
+
+.switchThumb {
+    width: 20px;
+    height: 20px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateX(0);
+}
+
+.switchTrackActive .switchThumb {
+    transform: translateX(20px);
+}
+
+.hiddenCheckbox {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+

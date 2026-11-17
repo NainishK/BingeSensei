@@ -337,6 +337,18 @@ def update_watchlist_item_status(db: Session, item_id: int, user_id: int, status
         if status == "watched" and db_item.media_type == "tv":
             if (db_item.current_season or 0) == 0 and (db_item.total_seasons or 0) > 0:
                 db_item.current_season = db_item.total_seasons
+        # Auto-follow on watching if user preference enabled (default True)
+        if status == "watching" and db_item.media_type == "tv":
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            auto_follow = True
+            if user and user.preferences:
+                try:
+                    prefs = json.loads(user.preferences)
+                    auto_follow = prefs.get("auto_follow_watching", True)
+                except Exception:
+                    pass
+            if auto_follow:
+                db_item.is_followed = True
         db.commit()
         db.refresh(db_item)
     return db_item
