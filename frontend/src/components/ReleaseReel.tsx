@@ -360,7 +360,7 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
                                     className={styles.watchBtn}
                                 >
                                     <Play size={15} fill="currentColor" />
-                                    Watch on {selectedDrop.available_on || 'Provider'}
+                                    Watch Now
                                     <ExternalLink size={13} />
                                 </a>
                             </div>
