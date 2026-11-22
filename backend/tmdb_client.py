@@ -121,9 +121,12 @@ def get_similar(media_type: str, tmdb_id: int):
         return {"results": []}
 
 def get_details(media_type: str, tmdb_id: int):
-    """Fetch full details including genres."""
+    """Fetch full details including genres and external IDs."""
     url = f"{TMDB_BASE_URL}/{media_type}/{tmdb_id}"
-    params = {"api_key": settings.TMDB_API_KEY}
+    params = {
+        "api_key": settings.TMDB_API_KEY,
+        "append_to_response": "external_ids"
+    }
     headers = {
         "User-Agent": "SubscriptionManager/1.0",
         "Accept": "application/json"

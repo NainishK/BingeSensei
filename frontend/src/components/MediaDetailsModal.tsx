@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Star, Calendar, Clock, Film, Tv, Plus, Minus, Zap } from 'lucide-react';
 import api from '@/lib/api';
 import StarRating from './StarRating';
+import { ImdbLogo, MalLogo, AnilistLogo, TmdbLogo } from './DatabaseLogos';
 import styles from './MediaDetailsModal.module.css';
 
 interface MediaDetailsModalProps {
@@ -30,6 +31,8 @@ interface MediaDetailsModalProps {
     onNotesChange?: (notes: string) => void;
     isFollowed?: boolean;
     onToggleFollow?: () => void;
+    originalLanguage?: string;
+    genreIds?: number[];
 }
 
 interface Provider {
@@ -60,12 +63,20 @@ interface MediaDetails {
     }[];
     vote_average?: number;
     overview?: string;
+    imdb_id?: string;
+    original_language?: string;
+    external_ids?: {
+        imdb_id?: string;
+        wikidata_id?: string;
+        tvdb_id?: number;
+    };
 }
 
 export default function MediaDetailsModal({
     visible, onClose, mediaType, tmdbId, initialData, addedAt, userRating, onRate,
     dbId, currentSeason = 0, currentEpisode = 0, onProgressChange, 
-    notes = "", onNotesChange, isFollowed = false, onToggleFollow
+    notes = "", onNotesChange, isFollowed = false, onToggleFollow,
+    originalLanguage, genreIds
 }: MediaDetailsModalProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { setMounted(true); }, []);
@@ -140,6 +151,22 @@ export default function MediaDetailsModal({
 
     // Combine all providers for simple display, or use just flatrate (streaming)
     const streamProviders = providers?.flatrate || [];
+
+    const title = initialData?.title || '';
+    const isAnime = Boolean(
+        mediaType === 'anime' ||
+        ((details?.original_language === 'ja' || originalLanguage === 'ja') &&
+         (details?.genres?.some(g => g.id === 16 || g.name?.toLowerCase() === 'animation') || genreIds?.includes(16)))
+    );
+
+    const imdbId = details?.external_ids?.imdb_id || details?.imdb_id;
+    const imdbUrl = imdbId
+        ? `https://www.imdb.com/title/${imdbId}/`
+        : `https://www.imdb.com/find/?q=${encodeURIComponent(title)}`;
+
+    const malUrl = `https://myanimelist.net/anime.php?q=${encodeURIComponent(title)}&cat=anime`;
+    const anilistUrl = `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`;
+    const tmdbUrl = `https://www.themoviedb.org/${mediaType === 'anime' ? 'tv' : mediaType}/${tmdbId}`;
 
     const handleBackdropClick = (e: React.MouseEvent) => {
         if (e.target === e.currentTarget) {
@@ -235,10 +262,64 @@ export default function MediaDetailsModal({
                             </span>
                         </div>
 
-                        <div className={styles.genres} style={{ marginBottom: '1.5rem' }}>
+                        <div className={styles.genres} style={{ marginBottom: '0.75rem' }}>
                             {details?.genres?.map(g => (
                                 <span key={g.id} className={styles.genreTag}>{g.name}</span>
                             ))}
+                        </div>
+
+                        {/* External Database Links (IMDb, MAL, AniList, TMDB) */}
+                        <div className={styles.externalLinksContainer}>
+                            <span className={styles.externalLinksLabel}>Links:</span>
+                            <div className={styles.externalLinksBadges}>
+                                <a
+                                    href={imdbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.extIconLink}
+                                    title="IMDb"
+                                    aria-label="View on IMDb"
+                                >
+                                    <ImdbLogo height={21} />
+                                </a>
+
+                                {isAnime && (
+                                    <a
+                                        href={malUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={styles.extIconLink}
+                                        title="MyAnimeList"
+                                        aria-label="Search on MyAnimeList"
+                                    >
+                                        <MalLogo height={21} />
+                                    </a>
+                                )}
+
+                                {isAnime && (
+                                    <a
+                                        href={anilistUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`${styles.extIconLink} ${styles.extAnilistIcon}`}
+                                        title="AniList"
+                                        aria-label="Search on AniList"
+                                    >
+                                        <AnilistLogo height={21} />
+                                    </a>
+                                )}
+
+                                <a
+                                    href={tmdbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.extIconLink}
+                                    title="The Movie Database"
+                                    aria-label="View on TMDB"
+                                >
+                                    <TmdbLogo height={21} />
+                                </a>
+                            </div>
                         </div>
 
                         {/* Rating & Progress Section */}

@@ -278,6 +278,65 @@
     border: 1px solid var(--border);
 }
 
+/* External Database Links (IMDb, MAL, AniList, TMDB) */
+.externalLinksContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.externalLinksLabel {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    margin-right: 0.1rem;
+}
+
+.externalLinksBadges {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.extIconLink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    text-decoration: none;
+    line-height: 0;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.extIconLink:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.extIconLink:active {
+    transform: translateY(0) scale(0.96);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.extAnilistIcon {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+:global([data-theme='light']) .extAnilistIcon {
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
 .sectionTitle {
     font-size: 0.85rem;
     text-transform: uppercase;

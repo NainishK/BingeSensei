@@ -521,6 +521,8 @@ export default function MediaCard({
                 onNotesChange={dbId ? handleNotesChange : undefined}
                 isFollowed={isFollowed}
                 onToggleFollow={dbId && item.media_type === 'tv' ? () => handleToggleFollow() : undefined}
+                originalLanguage={item.original_language}
+                genreIds={item.genre_ids}
             />
         </>
     );
