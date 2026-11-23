@@ -5,8 +5,6 @@ import api from '@/lib/api';
 import styles from './calendar.module.css';
 import {
     Calendar as CalendarIcon,
-    ChevronLeft,
-    ChevronRight,
     RotateCcw,
     List,
     Zap,
@@ -68,8 +66,14 @@ const getServiceColor = (name: string): string => {
     return '#a855f7'; // Default violet
 };
 
+function formatLocalDate(d: Date): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 export default function CalendarPage() {
-    const [currentDate, setCurrentDate] = useState(new Date());
     const [data, setData] = useState<CalendarResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
@@ -81,16 +85,33 @@ export default function CalendarPage() {
     const [syncing, setSyncing] = useState(false);
     const [shouldScrollToToday, setShouldScrollToToday] = useState(false);
 
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1;
-    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    // 4-Week Rolling Window centered on current week (Row 3 = This Week, containing Today)
+    const today = new Date();
+    const todayStr = formatLocalDate(today);
+    const dayOfWeek = today.getDay(); // 0 = Sun
+    const currentSunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - dayOfWeek);
+    const startSunday = new Date(currentSunday.getFullYear(), currentSunday.getMonth(), currentSunday.getDate() - 14);
+    const endSaturday = new Date(startSunday.getFullYear(), startSunday.getMonth(), startSunday.getDate() + 27);
+
+    const startStr = formatLocalDate(startSunday);
+    const endStr = formatLocalDate(endSaturday);
+
+    const startMonthName = startSunday.toLocaleString('default', { month: 'short' });
+    const endMonthName = endSaturday.toLocaleString('default', { month: 'short' });
+    const startYear = startSunday.getFullYear();
+    const endYear = endSaturday.getFullYear();
+
+    const rangeTitle = startYear === endYear
+        ? (startSunday.getMonth() === endSaturday.getMonth()
+            ? `${startMonthName} ${startSunday.getDate()} - ${endSaturday.getDate()}, ${startYear}`
+            : `${startMonthName} ${startSunday.getDate()} - ${endMonthName} ${endSaturday.getDate()}, ${startYear}`)
+        : `${startMonthName} ${startSunday.getDate()}, ${startYear} - ${endMonthName} ${endSaturday.getDate()}, ${endYear}`;
 
     const scrollToTodayElement = () => {
         let target = document.getElementById(viewMode === 'agenda' ? 'agenda-today' : 'calendar-today');
 
         // If in agenda view and today has no drops, locate the closest upcoming date
         if (!target && viewMode === 'agenda') {
-            const todayStr = new Date().toISOString().split('T')[0];
             const blocks = document.querySelectorAll('[data-agenda-date]');
             for (let i = 0; i < blocks.length; i++) {
                 const bDate = blocks[i].getAttribute('data-agenda-date');
@@ -126,7 +147,7 @@ export default function CalendarPage() {
                     activeCountry = 'IN';
                 }
             }
-            const res = await api.get(`/watchlist/calendar?month=${monthStr}&country=${activeCountry}`);
+            const res = await api.get(`/watchlist/calendar?start=${startStr}&end=${endStr}&country=${activeCountry}`);
             setData(res.data);
         } catch (err) {
             console.error('Failed to fetch calendar:', err);
@@ -138,7 +159,7 @@ export default function CalendarPage() {
     useEffect(() => {
         fetchCalendar();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [monthStr]);
+    }, [startStr, endStr]);
 
     useEffect(() => {
         if (shouldScrollToToday && !loading && data) {
@@ -151,23 +172,8 @@ export default function CalendarPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, loading, shouldScrollToToday]);
 
-    const handlePrevMonth = () => {
-        setCurrentDate(new Date(year, month - 2, 1));
-    };
-
-    const handleNextMonth = () => {
-        setCurrentDate(new Date(year, month, 1));
-    };
-
     const handleToday = () => {
-        const today = new Date();
-        const isSameMonth = today.getFullYear() === year && (today.getMonth() + 1) === month;
-        if (isSameMonth) {
-            scrollToTodayElement();
-        } else {
-            setShouldScrollToToday(true);
-            setCurrentDate(today);
-        }
+        scrollToTodayElement();
     };
 
     const handleSync = async () => {
@@ -184,9 +190,6 @@ export default function CalendarPage() {
         }
     };
 
-    const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const todayStr = new Date().toISOString().split('T')[0];
-
     // Filter events if followedOnly is active
     const filteredEvents = (data?.events || []).map((evt) => ({
         ...evt,
@@ -197,12 +200,8 @@ export default function CalendarPage() {
     const totalDropsInMonth = Object.values(data?.service_distribution || {}).reduce((a, b) => a + b, 0);
 
     // ========================================================
-    // Build Complete 35 or 42 Cell Month Matrix
+    // Build Complete 28 Cell 4-Week Grid Matrix
     // ========================================================
-    const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Sun
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
-
     interface GridCellData {
         dayNum: number;
         dateStr: string;
@@ -212,48 +211,16 @@ export default function CalendarPage() {
     }
 
     const gridCells: GridCellData[] = [];
-
-    // 1. Previous month trailing days
-    for (let i = firstDayIndex - 1; i >= 0; i--) {
-        const d = daysInPrevMonth - i;
-        const prevMonthNum = month === 1 ? 12 : month - 1;
-        const prevYear = month === 1 ? year - 1 : year;
-        const dStr = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        gridCells.push({
-            dayNum: d,
-            dateStr: dStr,
-            isCurrentMonth: false,
-            isToday: dStr === todayStr,
-            drops: []
-        });
-    }
-
-    // 2. Current month days
-    for (let d = 1; d <= daysInMonth; d++) {
-        const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    for (let i = 0; i < 28; i++) {
+        const cellDate = new Date(startSunday.getFullYear(), startSunday.getMonth(), startSunday.getDate() + i);
+        const dStr = formatLocalDate(cellDate);
         const dayDrops = (filteredEvents.find((e) => e.date === dStr)?.drops) || [];
         gridCells.push({
-            dayNum: d,
+            dayNum: cellDate.getDate(),
             dateStr: dStr,
-            isCurrentMonth: true,
+            isCurrentMonth: cellDate.getMonth() === today.getMonth(),
             isToday: dStr === todayStr,
             drops: dayDrops
-        });
-    }
-
-    // 3. Next month leading days to complete full 35 or 42 grid
-    const totalCells = gridCells.length > 35 ? 42 : 35;
-    const remainingCells = totalCells - gridCells.length;
-    for (let d = 1; d <= remainingCells; d++) {
-        const nextMonthNum = month === 12 ? 1 : month + 1;
-        const nextYear = month === 12 ? year + 1 : year;
-        const dStr = `${nextYear}-${String(nextMonthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        gridCells.push({
-            dayNum: d,
-            dateStr: dStr,
-            isCurrentMonth: false,
-            isToday: dStr === todayStr,
-            drops: []
         });
     }
 
@@ -274,28 +241,22 @@ export default function CalendarPage() {
                 </div>
 
                 <div className={styles.headerControls}>
-                    {/* Month Navigator */}
+                    {/* 4-Week Window Label & Jump to Today */}
                     <div className={styles.monthNav}>
-                        <button className={styles.monthBtn} onClick={handlePrevMonth} title="Previous Month">
-                            <ChevronLeft size={18} />
-                        </button>
-                        <span className={styles.monthTitle}>{monthName}</span>
-                        <button className={styles.monthBtn} onClick={handleNextMonth} title="Next Month">
-                            <ChevronRight size={18} />
-                        </button>
-                        <button className={styles.todayBtn} onClick={handleToday} title="Go to current month">
+                        <span className={styles.monthTitle}>{rangeTitle}</span>
+                        <button className={styles.todayBtn} onClick={handleToday} title="Jump to today">
                             Today
                         </button>
                     </div>
 
-                    {/* View Switcher: Month Grid vs Agenda List */}
+                    {/* View Switcher: 4-Week Grid vs Agenda List */}
                     <div className={styles.viewToggle}>
                         <button
                             className={`${styles.toggleBtn} ${viewMode === 'month' ? styles.toggleBtnActive : ''}`}
                             onClick={() => setViewMode('month')}
-                            title="Month Calendar Grid"
+                            title="4-Week Grid View"
                         >
-                            <CalendarIcon size={14} /> Month
+                            <CalendarIcon size={14} /> 4-Week
                         </button>
                         <button
                             className={`${styles.toggleBtn} ${viewMode === 'agenda' ? styles.toggleBtnActive : ''}`}
@@ -331,8 +292,8 @@ export default function CalendarPage() {
                         <Sparkles size={16} color="#f59e0b" />
                         <span>
                             {totalDropsInMonth > 0
-                                ? `${totalDropsInMonth} drops scheduled across ${Object.keys(data?.service_distribution || {}).length} services in ${monthName}`
-                                : `No drops scheduled on your tracked shows for ${monthName}`}
+                                ? `${totalDropsInMonth} drops scheduled across ${Object.keys(data?.service_distribution || {}).length} services in this 4-week schedule`
+                                : `No drops scheduled on your tracked shows for this 4-week schedule`}
                         </span>
                     </div>
 
@@ -694,8 +655,8 @@ export default function CalendarPage() {
                     ) : (
                         <div className={styles.emptyCalendar}>
                             <CalendarIcon size={42} className={styles.emptyIcon} />
-                            <h3>No releases found for {monthName}</h3>
-                            <p>Follow more TV shows or check a different month.</p>
+                            <h3>No releases found for this 4-week schedule</h3>
+                            <p>Follow more TV shows or check your watchlist filters.</p>
                         </div>
                     )}
                 </div>

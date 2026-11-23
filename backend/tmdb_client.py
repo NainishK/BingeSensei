@@ -6,12 +6,45 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+import time
+
 # Global Robust Session
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
 session.mount('https://', HTTPAdapter(max_retries=retries))
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
+
+# Cache for season episodes: (tmdb_id, season_number) -> (timestamp, data)
+_season_cache: dict[tuple[int, int], tuple[float, list[dict]]] = {}
+SEASON_CACHE_TTL = 3600 * 12  # 12 hours
+
+def get_season_episodes(tmdb_id: int, season_number: int) -> list[dict]:
+    """Fetch episode list for a specific season with in-memory caching."""
+    now = time.time()
+    cache_key = (tmdb_id, season_number)
+    if cache_key in _season_cache:
+        cached_time, cached_episodes = _season_cache[cache_key]
+        if now - cached_time < SEASON_CACHE_TTL:
+            return cached_episodes
+
+    url = f"{TMDB_BASE_URL}/tv/{tmdb_id}/season/{season_number}"
+    params = {"api_key": settings.TMDB_API_KEY}
+    headers = {
+        "User-Agent": "SubscriptionManager/1.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = session.get(url, params=params, headers=headers, timeout=10, verify=False)
+        if response.status_code == 200:
+            data = response.json()
+            episodes = data.get("episodes", [])
+            _season_cache[cache_key] = (now, episodes)
+            return episodes
+    except Exception as e:
+        print(f"Error fetching season {season_number} for TV {tmdb_id}: {e}")
+
+    return []
 
 def search_multi(query: str):
     if not settings.TMDB_API_KEY or settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":

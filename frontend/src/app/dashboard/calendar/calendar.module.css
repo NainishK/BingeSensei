@@ -88,12 +88,12 @@
 }
 
 .monthTitle {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     font-weight: 700;
-    padding: 0 8px;
+    padding: 0 10px;
     color: var(--foreground);
-    min-width: 140px;
     text-align: center;
+    white-space: nowrap;
 }
 
 .viewToggle {
@@ -429,6 +429,11 @@
 /* Remove right border on Saturday (last column) */
 .calendarDayCell:nth-child(7n) {
     border-right: none;
+}
+
+/* Remove bottom border on last row of 4-week matrix */
+.calendarDayCell:nth-last-child(-n+7) {
+    border-bottom: none;
 }
 
 .calendarDayCell:hover {

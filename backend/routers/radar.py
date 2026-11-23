@@ -323,37 +323,53 @@ def get_activity_drops(
 @router.get("/calendar", response_model=schemas.CalendarResponse)
 def get_calendar(
     background_tasks: BackgroundTasks,
+    start: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end: str = Query(None, description="End date in YYYY-MM-DD format"),
     month: str = Query(None, description="Month in YYYY-MM format"),
     country: str = Query(None, description="Country filter"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Get full calendar schedule and Subscription Heatmap for the requested month.
+    Get 4-week radar or requested date-range schedule and Subscription Heatmap.
     """
     background_tasks.add_task(sync_user_radar, db, current_user.id, False)
     radar_settings = get_user_radar_settings(current_user)
     today = date.today()
     target_country = (country or current_user.country or "US").upper().strip()
-    if not month:
-        target_year = today.year
-        target_month = today.month
-        month_str = today.strftime("%Y-%m")
-    else:
-        try:
-            parts = month.split("-")
-            target_year = int(parts[0])
-            target_month = int(parts[1])
-            month_str = f"{target_year:04d}-{target_month:02d}"
-        except Exception:
-            target_year = today.year
-            target_month = today.month
-            month_str = today.strftime("%Y-%m")
 
-    # Calculate month bounds
-    _, num_days = calendar.monthrange(target_year, target_month)
-    start_date = date(target_year, target_month, 1)
-    end_date = date(target_year, target_month, num_days)
+    start_date = None
+    end_date = None
+
+    if start and end:
+        try:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date()
+            end_date = datetime.strptime(end, "%Y-%m-%d").date()
+        except Exception:
+            start_date = None
+            end_date = None
+
+    if not start_date or not end_date:
+        if month:
+            try:
+                parts = month.split("-")
+                target_year = int(parts[0])
+                target_month = int(parts[1])
+                _, num_days = calendar.monthrange(target_year, target_month)
+                start_date = date(target_year, target_month, 1)
+                end_date = date(target_year, target_month, num_days)
+            except Exception:
+                start_date = None
+                end_date = None
+
+    # Default to 4-week window centered on current week (Row 3 = current week: 2 past weeks, 1 future week)
+    if not start_date or not end_date:
+        days_since_sunday = (today.weekday() + 1) % 7
+        current_sunday = today - timedelta(days=days_since_sunday)
+        start_date = current_sunday - timedelta(days=14)
+        end_date = start_date + timedelta(days=27)
+
+    month_str = month or f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
 
     active_subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
@@ -371,76 +387,148 @@ def get_calendar(
     events_by_date: dict[str, list[schemas.ActivityDrop]] = {}
     service_distribution: dict[str, int] = {}
     service_drops_count: dict[str, int] = {s.service_name: 0 for s in active_subs}
+    seen_episodes: set[tuple[int, int, int]] = set()
 
     for item in items:
-        # Include any TV show with releases in this month (exclude dropped unless explicitly followed)
+        # Include any TV show with releases in this window (exclude dropped unless explicitly followed)
         if item.status == "dropped" and not item.is_followed:
             continue
 
         is_sub_match = is_provider_in_subs(item.available_on, set(active_services.keys()))
 
-        # Check last_air_date in range
-        if item.last_air_date and start_date <= item.last_air_date <= end_date:
-            d_str = item.last_air_date.strftime("%Y-%m-%d")
-            diff = (item.last_air_date - today).days
-            drop = schemas.ActivityDrop(
-                item_id=item.id,
-                tmdb_id=item.tmdb_id,
-                title=item.title,
-                media_type=item.media_type,
-                poster_path=item.poster_path,
-                available_on=item.available_on,
-                is_on_active_subscription=is_sub_match,
-                drop_type="new_season" if item.last_episode_number == 1 else "new_episode",
-                season_number=item.last_episode_season,
-                episode_number=item.last_episode_number,
-                episode_name=item.last_episode_name,
-                episode_still=item.last_episode_still,
-                air_date=item.last_air_date,
-                days_relative=diff,
-                status=item.status,
-                current_season=item.current_season,
-                current_episode=item.current_episode,
-                is_followed=bool(item.is_followed)
-            )
-            events_by_date.setdefault(d_str, []).append(drop)
-            
-            # Service count
-            if item.available_on:
-                service_distribution[item.available_on] = service_distribution.get(item.available_on, 0) + 1
-                for s_name in service_drops_count:
-                    if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
-                        service_drops_count[s_name] += 1
+        # 1. Fetch detailed season episodes for active/recent shows
+        found_season_drops = False
+        season_num = item.next_episode_season or item.last_episode_season or item.current_season or 1
+        has_recent_activity = (item.last_air_date and item.last_air_date >= date(today.year - 1, 1, 1)) or bool(item.next_air_date) or item.status in ["watching", "plan_to_watch"]
+        
+        if has_recent_activity and item.tmdb_id:
+            episodes = tmdb_client.get_season_episodes(item.tmdb_id, season_num)
+            if episodes:
+                for ep in episodes:
+                    air_str = ep.get("air_date")
+                    if not air_str:
+                        continue
+                    try:
+                        ep_air_date = datetime.strptime(air_str, "%Y-%m-%d").date()
+                    except Exception:
+                        continue
 
-        # Check next_air_date in range
-        if item.next_air_date and start_date <= item.next_air_date <= end_date:
-            d_str = item.next_air_date.strftime("%Y-%m-%d")
-            diff = (item.next_air_date - today).days
-            drop = schemas.ActivityDrop(
-                item_id=item.id,
-                tmdb_id=item.tmdb_id,
-                title=item.title,
-                media_type=item.media_type,
-                poster_path=item.poster_path,
-                available_on=item.available_on,
-                is_on_active_subscription=is_sub_match,
-                drop_type="new_season" if item.next_episode_number == 1 else "upcoming",
-                season_number=item.next_episode_season,
-                episode_number=item.next_episode_number,
-                episode_name=item.next_episode_name,
-                air_date=item.next_air_date,
-                days_relative=diff,
-                status=item.status,
-                current_season=item.current_season,
-                current_episode=item.current_episode,
-                is_followed=bool(item.is_followed)
-            )
-            events_by_date.setdefault(d_str, []).append(drop)
-            if item.available_on:
-                service_distribution[item.available_on] = service_distribution.get(item.available_on, 0) + 1
-                for s_name in service_drops_count:
-                    if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
-                        service_drops_count[s_name] += 1
+                    if start_date <= ep_air_date <= end_date:
+                        ep_num = ep.get("episode_number") or 1
+                        ep_s_num = ep.get("season_number") or season_num
+                        ep_key = (item.id, ep_s_num, ep_num)
+                        if ep_key in seen_episodes:
+                            continue
+                        seen_episodes.add(ep_key)
+                        found_season_drops = True
+
+                        diff = (ep_air_date - today).days
+                        is_season_premiere = (ep_num == 1)
+                        if diff < 0:
+                            drop_type = "new_season" if is_season_premiere else "new_episode"
+                        elif diff == 0:
+                            drop_type = "new_season" if is_season_premiere else "new_episode"
+                        else:
+                            drop_type = "new_season" if is_season_premiere else "upcoming"
+
+                        drop = schemas.ActivityDrop(
+                            item_id=item.id,
+                            tmdb_id=item.tmdb_id,
+                            title=item.title,
+                            media_type=item.media_type,
+                            poster_path=item.poster_path,
+                            available_on=item.available_on,
+                            is_on_active_subscription=is_sub_match,
+                            drop_type=drop_type,
+                            season_number=ep_s_num,
+                            episode_number=ep_num,
+                            episode_name=ep.get("name"),
+                            episode_still=ep.get("still_path"),
+                            air_date=ep_air_date,
+                            days_relative=diff,
+                            status=item.status,
+                            current_season=item.current_season,
+                            current_episode=item.current_episode,
+                            is_followed=bool(item.is_followed)
+                        )
+                        events_by_date.setdefault(air_str, []).append(drop)
+
+                        if item.available_on:
+                            service_distribution[item.available_on] = service_distribution.get(item.available_on, 0) + 1
+                            for s_name in service_drops_count:
+                                if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
+                                    service_drops_count[s_name] += 1
+
+        # 2. Fallback to single last_air_date / next_air_date if season episodes returned no hits
+        if not found_season_drops:
+            if item.last_air_date and start_date <= item.last_air_date <= end_date:
+                ep_s = item.last_episode_season or 1
+                ep_n = item.last_episode_number or 1
+                ep_key = (item.id, ep_s, ep_n)
+                if ep_key not in seen_episodes:
+                    seen_episodes.add(ep_key)
+                    d_str = item.last_air_date.strftime("%Y-%m-%d")
+                    diff = (item.last_air_date - today).days
+                    drop = schemas.ActivityDrop(
+                        item_id=item.id,
+                        tmdb_id=item.tmdb_id,
+                        title=item.title,
+                        media_type=item.media_type,
+                        poster_path=item.poster_path,
+                        available_on=item.available_on,
+                        is_on_active_subscription=is_sub_match,
+                        drop_type="new_season" if item.last_episode_number == 1 else "new_episode",
+                        season_number=item.last_episode_season,
+                        episode_number=item.last_episode_number,
+                        episode_name=item.last_episode_name,
+                        episode_still=item.last_episode_still,
+                        air_date=item.last_air_date,
+                        days_relative=diff,
+                        status=item.status,
+                        current_season=item.current_season,
+                        current_episode=item.current_episode,
+                        is_followed=bool(item.is_followed)
+                    )
+                    events_by_date.setdefault(d_str, []).append(drop)
+                    if item.available_on:
+                        service_distribution[item.available_on] = service_distribution.get(item.available_on, 0) + 1
+                        for s_name in service_drops_count:
+                            if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
+                                service_drops_count[s_name] += 1
+
+            if item.next_air_date and start_date <= item.next_air_date <= end_date:
+                ep_s = item.next_episode_season or 1
+                ep_n = item.next_episode_number or 1
+                ep_key = (item.id, ep_s, ep_n)
+                if ep_key not in seen_episodes:
+                    seen_episodes.add(ep_key)
+                    d_str = item.next_air_date.strftime("%Y-%m-%d")
+                    diff = (item.next_air_date - today).days
+                    drop = schemas.ActivityDrop(
+                        item_id=item.id,
+                        tmdb_id=item.tmdb_id,
+                        title=item.title,
+                        media_type=item.media_type,
+                        poster_path=item.poster_path,
+                        available_on=item.available_on,
+                        is_on_active_subscription=is_sub_match,
+                        drop_type="new_season" if item.next_episode_number == 1 else "upcoming",
+                        season_number=item.next_episode_season,
+                        episode_number=item.next_episode_number,
+                        episode_name=item.next_episode_name,
+                        air_date=item.next_air_date,
+                        days_relative=diff,
+                        status=item.status,
+                        current_season=item.current_season,
+                        current_episode=item.current_episode,
+                        is_followed=bool(item.is_followed)
+                    )
+                    events_by_date.setdefault(d_str, []).append(drop)
+                    if item.available_on:
+                        service_distribution[item.available_on] = service_distribution.get(item.available_on, 0) + 1
+                        for s_name in service_drops_count:
+                            if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
+                                service_drops_count[s_name] += 1
 
     events = [
         schemas.CalendarEvent(date=d, drops=drops)
