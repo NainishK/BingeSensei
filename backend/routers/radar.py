@@ -91,6 +91,17 @@ def sync_user_radar(db: Session, user_id: int, force: bool = False):
         if force or not show.last_air_check or show.last_air_check < cutoff:
             sync_show_release_info(db, show)
 
+def bg_sync_user_radar(user_id: int, force: bool = False):
+    """Dedicated background task worker with isolated DB session."""
+    from database import SessionLocal
+    bg_db = SessionLocal()
+    try:
+        sync_user_radar(bg_db, user_id, force)
+    except Exception as e:
+        logger.error(f"Error in bg_sync_user_radar for user {user_id}: {e}")
+    finally:
+        bg_db.close()
+
 def get_user_radar_settings(user: models.User) -> schemas.UserRadarSettings:
     prefs = {}
     if user.preferences:
@@ -124,7 +135,7 @@ def get_activity_drops(
     Get fresh drops, upcoming drops, reel highlights, and resurrected shows.
     """
     # Trigger background sync if shows are stale
-    background_tasks.add_task(sync_user_radar, db, current_user.id, False)
+    background_tasks.add_task(bg_sync_user_radar, current_user.id, False)
 
     today = date.today()
     target_country = (country or current_user.country or "US").upper().strip()
@@ -333,7 +344,7 @@ def get_calendar(
     """
     Get 4-week radar or requested date-range schedule and Subscription Heatmap.
     """
-    background_tasks.add_task(sync_user_radar, db, current_user.id, False)
+    background_tasks.add_task(bg_sync_user_radar, current_user.id, False)
     radar_settings = get_user_radar_settings(current_user)
     today = date.today()
     target_country = (country or current_user.country or "US").upper().strip()
@@ -384,6 +395,38 @@ def get_calendar(
         models.WatchlistItem.media_type == "tv"
     ).all()
 
+    # Pre-filter candidate shows and fetch season episodes concurrently
+    candidate_items = []
+    for item in items:
+        if item.status == "dropped" and not item.is_followed:
+            continue
+        if item.air_status in ["Ended", "Canceled"] and item.last_air_date and item.last_air_date < date(today.year - 1, 1, 1):
+            continue
+        has_recent = (
+            (item.last_air_date and item.last_air_date >= start_date - timedelta(days=60)) or
+            (item.next_air_date and item.next_air_date >= start_date - timedelta(days=14)) or
+            item.is_followed or
+            (item.status == "watching" and (not item.last_air_date or item.last_air_date >= date(today.year - 1, 1, 1))) or
+            not item.last_air_check
+        )
+        if has_recent and item.tmdb_id:
+            season_num = item.next_episode_season or item.last_episode_season or item.current_season or 1
+            candidate_items.append((item, season_num))
+
+    episodes_by_item_id: dict[int, list[dict]] = {}
+    if candidate_items:
+        from concurrent.futures import ThreadPoolExecutor
+        def fetch_show_eps(pair):
+            it, s_num = pair
+            try:
+                return it.id, tmdb_client.get_season_episodes(it.tmdb_id, s_num)
+            except Exception:
+                return it.id, []
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for item_id, eps in executor.map(fetch_show_eps, candidate_items):
+                episodes_by_item_id[item_id] = eps
+
     events_by_date: dict[str, list[schemas.ActivityDrop]] = {}
     service_distribution: dict[str, int] = {}
     service_drops_count: dict[str, int] = {s.service_name: 0 for s in active_subs}
@@ -399,11 +442,8 @@ def get_calendar(
         # 1. Fetch detailed season episodes for active/recent shows
         found_season_drops = False
         season_num = item.next_episode_season or item.last_episode_season or item.current_season or 1
-        has_recent_activity = (item.last_air_date and item.last_air_date >= date(today.year - 1, 1, 1)) or bool(item.next_air_date) or item.status in ["watching", "plan_to_watch"]
-        
-        if has_recent_activity and item.tmdb_id:
-            episodes = tmdb_client.get_season_episodes(item.tmdb_id, season_num)
-            if episodes:
+        episodes = episodes_by_item_id.get(item.id)
+        if episodes:
                 for ep in episodes:
                     air_str = ep.get("air_date")
                     if not air_str:
@@ -656,7 +696,7 @@ def force_sync_releases(
     """
     Force sync release data for all followed and watching TV shows.
     """
-    background_tasks.add_task(sync_user_radar, db, current_user.id, True)
+    background_tasks.add_task(bg_sync_user_radar, current_user.id, True)
     return {"status": "success", "message": "Release sync scheduled in background."}
 
 @router.get("/user/radar-settings", response_model=schemas.UserRadarSettings)

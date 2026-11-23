@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ActivityDrop } from '@/components/ReleaseReel';
 import { ServiceIcon } from '@/components/ServiceIcon';
+import { CalendarSkeleton } from '@/components/SkeletonLoader';
 
 interface ValueScorecardItem {
     id: number;
@@ -76,6 +77,7 @@ function formatLocalDate(d: Date): string {
 export default function CalendarPage() {
     const [data, setData] = useState<CalendarResponse | null>(null);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
     const [followedOnly, setFollowedOnly] = useState(false);
     const [showScorecards, setShowScorecards] = useState(false);
@@ -135,7 +137,7 @@ export default function CalendarPage() {
     };
 
     const fetchCalendar = async (countryOverride?: string) => {
-        setLoading(true);
+        setFetchError(null);
         try {
             let activeCountry = countryOverride || userCountry;
             if (!activeCountry) {
@@ -149,14 +151,38 @@ export default function CalendarPage() {
             }
             const res = await api.get(`/watchlist/calendar?start=${startStr}&end=${endStr}&country=${activeCountry}`);
             setData(res.data);
+            try {
+                localStorage.setItem('binge_calendar_cache', JSON.stringify({
+                    data: res.data,
+                    range: `${startStr}_${endStr}`,
+                    timestamp: Date.now()
+                }));
+            } catch {
+                // Ignore storage errors
+            }
         } catch (err) {
             console.error('Failed to fetch calendar:', err);
+            setFetchError('Unable to load schedule. Please check your connection or retry.');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
+        // 1. Instant Cache Restoration (<50ms)
+        try {
+            const cached = localStorage.getItem('binge_calendar_cache');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.data && parsed.range === `${startStr}_${endStr}`) {
+                    setData(parsed.data);
+                    setLoading(false);
+                }
+            }
+        } catch {
+            // Ignore cache errors
+        }
+
         fetchCalendar();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [startStr, endStr]);
@@ -225,6 +251,25 @@ export default function CalendarPage() {
     }
 
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    if (loading && !data) {
+        return <CalendarSkeleton />;
+    }
+
+    if (fetchError && !data) {
+        return (
+            <div className={styles.pageContainer}>
+                <div className={styles.emptyCalendar}>
+                    <CalendarIcon size={42} className={styles.emptyIcon} />
+                    <h3>Unable to load release schedule</h3>
+                    <p>{fetchError}</p>
+                    <button className={styles.todayBtn} onClick={() => fetchCalendar()} style={{ marginTop: '1rem', padding: '8px 18px' }}>
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={styles.pageContainer}>

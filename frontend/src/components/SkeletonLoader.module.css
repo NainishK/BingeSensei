@@ -68,3 +68,15 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
 }
+
+.calendarGridSkeleton {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.calendarCellSkeleton {
+  height: 172px;
+  border-radius: 14px;
+}
