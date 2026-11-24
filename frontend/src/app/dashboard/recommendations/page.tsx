@@ -6,9 +6,10 @@ import styles from './recommendations.module.css';
 import { Recommendation } from '@/lib/types';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Tv, Globe, Layers } from 'lucide-react';
+import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Tv, Globe, Layers, Flame, Star, Check, Plus, Info, Loader2 } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import AIInsightsModal from '@/components/AIInsightsModal';
+import MediaDetailsModal from '@/components/MediaDetailsModal';
 import { formatCurrency } from '@/lib/currency';
 
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -111,6 +112,10 @@ export default function RecommendationsPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [showAIModal, setShowAIModal] = useState(false);
     const [trendingIndex, setTrendingIndex] = useState(0);
+    const [heroIndex, setHeroIndex] = useState(0);
+    const [isHeroHovered, setIsHeroHovered] = useState(false);
+    const [heroAdding, setHeroAdding] = useState(false);
+    const [detailsModalItem, setDetailsModalItem] = useState<MediaItem | null>(null);
     const [userCountry, setUserCountry] = useState('US');
     const [userSubscriptions, setUserSubscriptions] = useState<string[]>([]);
     const [filterTab, setFilterTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
@@ -241,6 +246,63 @@ export default function RecommendationsPage() {
         return true;
     });
 
+    useEffect(() => {
+        if (isHeroHovered || filteredTrendingRecs.length <= 1) return;
+        const interval = setInterval(() => {
+            setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
+        }, 6000);
+        return () => clearInterval(interval);
+    }, [isHeroHovered, filteredTrendingRecs.length]);
+
+    const handleHeroWatchlistClick = async (rec: Recommendation, existingId?: number, existingStatus?: string) => {
+        if (heroAdding) return;
+        setHeroAdding(true);
+        try {
+            if (existingId) {
+                const nextStatus = existingStatus === 'plan_to_watch' ? 'watching' : 'plan_to_watch';
+                await api.put(`/watchlist/${existingId}`, { status: nextStatus });
+            } else {
+                await api.post('/watchlist/', {
+                    tmdb_id: rec.tmdb_id || 0,
+                    title: rec.items[0],
+                    media_type: rec.media_type || 'movie',
+                    poster_path: rec.poster_path,
+                    backdrop_path: rec.backdrop_path,
+                    vote_average: rec.vote_average,
+                    overview: rec.overview,
+                    status: 'plan_to_watch',
+                    genre_ids: rec.genre_ids,
+                    original_language: rec.original_language
+                });
+            }
+            await fetchWatchlist();
+        } catch (e) {
+            console.error('Failed to update watchlist from hero', e);
+        } finally {
+            setHeroAdding(false);
+        }
+    };
+
+    const handleHeroMoreInfo = (rec: Recommendation, existingItem?: { id: number; status: string; user_rating?: number; current_season?: number; current_episode?: number; notes?: string }) => {
+        setDetailsModalItem({
+            id: rec.tmdb_id || 0,
+            dbId: existingItem?.id,
+            title: rec.items[0],
+            overview: rec.overview || '',
+            poster_path: rec.poster_path || '',
+            backdrop_path: rec.backdrop_path,
+            vote_average: rec.vote_average || 0,
+            media_type: (rec.media_type as 'movie' | 'tv') || 'movie',
+            user_rating: existingItem?.user_rating || 0,
+            status: existingItem?.status,
+            genre_ids: rec.genre_ids,
+            original_language: rec.original_language,
+            current_season: existingItem?.current_season,
+            current_episode: existingItem?.current_episode,
+            notes: existingItem?.notes
+        });
+    };
+
     if (loadingDashboard && dashboardRecs.length === 0) return <RecommendationsSkeleton />;
 
     return (
@@ -256,126 +318,259 @@ export default function RecommendationsPage() {
                 onWatchlistUpdate={fetchWatchlist}
             />
 
-            {/* Trending Section - Carousel & Filter Pills */}
-            {trendingRecs.length > 0 && (
-                <section className={styles.section}>
-                    <div className={styles.sectionHeader}>
-                        <h2 className={styles.sectionTitle} style={{ color: '#ec4899' }}>
-                            <PlayCircle className={styles.sectionIcon} /> Trending Content
-                        </h2>
-                        {/* Carousel Controls */}
-                        <div className={styles.carouselControls}>
+            {/* Trending Section - Cinematic Hero Showcase & Filter Pills */}
+            {trendingRecs.length > 0 && (() => {
+                const safeHeroIndex = filteredTrendingRecs.length > 0 ? heroIndex % filteredTrendingRecs.length : 0;
+                const currentHero = filteredTrendingRecs[safeHeroIndex];
+                const existingHeroItem = currentHero ? watchlist.find(w => w.tmdb_id === currentHero.tmdb_id) : undefined;
+                const releaseYear = currentHero?.release_date ? currentHero.release_date.split('-')[0] : '';
+                const heroBackdrop = currentHero?.backdrop_path
+                    ? `https://image.tmdb.org/t/p/w1280${currentHero.backdrop_path}`
+                    : (currentHero?.poster_path ? `https://image.tmdb.org/t/p/w1280${currentHero.poster_path}` : '');
+
+                return (
+                    <section className={styles.section}>
+                        <div className={styles.sectionHeader}>
+                            <h2 className={styles.sectionTitle} style={{ color: '#ec4899' }}>
+                                <PlayCircle className={styles.sectionIcon} /> Trending Content
+                            </h2>
+                        </div>
+
+                        {/* Mobile Filter Dropdown */}
+                        <CustomFilterDropdown
+                            value={trendingTab}
+                            onChange={(val) => {
+                                setTrendingTab(val);
+                                setHeroIndex(0);
+                                setTrendingIndex(0);
+                            }}
+                            options={[
+                                { 
+                                    value: 'all', 
+                                    label: 'All Trending', 
+                                    count: trendingRecs.length, 
+                                    icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
+                                },
+                                { 
+                                    value: 'subscriptions', 
+                                    label: 'On My Subscriptions', 
+                                    count: trendingSubCount, 
+                                    icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
+                                },
+                                { 
+                                    value: 'explore', 
+                                    label: 'Worldwide & Explore', 
+                                    count: trendingExploreCount, 
+                                    icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
+                                },
+                            ]}
+                        />
+
+                        {/* Desktop Filter Pills */}
+                        <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`} style={{ marginBottom: '1.25rem' }}>
                             <button
-                                onClick={handlePrevTrending}
-                                disabled={trendingIndex === 0}
-                                className={styles.carouselBtn}
+                                className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
+                                onClick={() => { setTrendingTab('all'); setHeroIndex(0); setTrendingIndex(0); }}
                             >
-                                <ChevronLeft size={20} />
+                                <span className={styles.iconRecsAll}><Layers size={14} /></span>
+                                <span className={styles.pillLabel}>All Trending</span>
+                                <span className={styles.pillCount}>{trendingRecs.length}</span>
                             </button>
                             <button
-                                onClick={handleNextTrending}
-                                disabled={trendingIndex + trendingVisible >= filteredTrendingRecs.length}
-                                className={styles.carouselBtn}
+                                className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                                onClick={() => { setTrendingTab('subscriptions'); setHeroIndex(0); setTrendingIndex(0); }}
                             >
-                                <ChevronRight size={20} />
+                                <span className={styles.iconRecsSubs}><Tv size={14} /></span>
+                                <span className={styles.pillLabel}>On My Subscriptions</span>
+                                <span className={styles.pillCount}>{trendingSubCount}</span>
+                            </button>
+                            <button
+                                className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
+                                onClick={() => { setTrendingTab('explore'); setHeroIndex(0); setTrendingIndex(0); }}
+                            >
+                                <span className={styles.iconRecsExplore}><Globe size={14} /></span>
+                                <span className={styles.pillLabel}>Worldwide & Explore</span>
+                                <span className={styles.pillCount}>{trendingExploreCount}</span>
                             </button>
                         </div>
-                    </div>
 
-                    {/* Mobile Filter Dropdown */}
-                    <CustomFilterDropdown
-                        value={trendingTab}
-                        onChange={(val) => {
-                            setTrendingTab(val);
-                            setTrendingIndex(0);
-                        }}
-                        options={[
-                            { 
-                                value: 'all', 
-                                label: 'All Trending', 
-                                count: trendingRecs.length, 
-                                icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
-                            },
-                            { 
-                                value: 'subscriptions', 
-                                label: 'On My Subscriptions', 
-                                count: trendingSubCount, 
-                                icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
-                            },
-                            { 
-                                value: 'explore', 
-                                label: 'Worldwide & Explore', 
-                                count: trendingExploreCount, 
-                                icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
-                            },
-                        ]}
-                    />
-
-                    {/* Desktop Filter Pills */}
-                    <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`} style={{ marginBottom: '1.25rem' }}>
-                        <button
-                            className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
-                            onClick={() => { setTrendingTab('all'); setTrendingIndex(0); }}
-                        >
-                            <span className={styles.iconRecsAll}><Layers size={14} /></span>
-                            <span className={styles.pillLabel}>All Trending</span>
-                            <span className={styles.pillCount}>{trendingRecs.length}</span>
-                        </button>
-                        <button
-                            className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
-                            onClick={() => { setTrendingTab('subscriptions'); setTrendingIndex(0); }}
-                        >
-                            <span className={styles.iconRecsSubs}><Tv size={14} /></span>
-                            <span className={styles.pillLabel}>On My Subscriptions</span>
-                            <span className={styles.pillCount}>{trendingSubCount}</span>
-                        </button>
-                        <button
-                            className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
-                            onClick={() => { setTrendingTab('explore'); setTrendingIndex(0); }}
-                        >
-                            <span className={styles.iconRecsExplore}><Globe size={14} /></span>
-                            <span className={styles.pillLabel}>Worldwide & Explore</span>
-                            <span className={styles.pillCount}>{trendingExploreCount}</span>
-                        </button>
-                    </div>
-
-                    <div key={trendingTab} className={styles.grid}>
-                        {filteredTrendingRecs.slice(trendingIndex, trendingIndex + trendingVisible).map((rec, index) => {
-                            const tmdbId = rec.tmdb_id || 0;
-                            const existingItem = watchlist.find(w => w.tmdb_id === tmdbId || (w.tmdb_id === 0 && rec.items[0] === 'Title needed')); // Strict ID match preference
-
-                            return (
-                                <div key={`${trendingIndex}-${index}`} className={styles.recommendationItem}>
-                                    <MediaCard
-                                        item={{
-                                            id: tmdbId,
-                                            dbId: existingItem?.id,
-                                            title: rec.items[0],
-                                            overview: rec.overview || '',
-                                            poster_path: rec.poster_path || '',
-                                            vote_average: rec.vote_average || 0,
-                                            media_type: rec.media_type || 'movie',
-                                            user_rating: existingItem?.user_rating || 0,
-                                            status: existingItem?.status,
-                                            genre_ids: rec.genre_ids,
-                                            original_language: rec.original_language,
-                                            current_season: existingItem?.current_season,
-                                            current_episode: existingItem?.current_episode,
-                                            notes: existingItem?.notes
-                                        }}
-                                        showServiceBadge={rec.service_name}
-                                        customBadgeColor="#db2777"
-                                        existingStatus={existingItem?.status}
-                                        onAddSuccess={fetchWatchlist}
-                                        onStatusChange={() => fetchWatchlist()}
-                                        onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
-                                    />
+                        {/* Cinematic Hero Showcase */}
+                        {currentHero && (
+                            <div
+                                className={styles.heroShowcase}
+                                onMouseEnter={() => setIsHeroHovered(true)}
+                                onMouseLeave={() => setIsHeroHovered(false)}
+                            >
+                                <div className={styles.heroBackdropWrapper}>
+                                    {heroBackdrop ? (
+                                        <img
+                                            src={heroBackdrop}
+                                            alt={currentHero.items[0]}
+                                            className={styles.heroBackdropImg}
+                                        />
+                                    ) : (
+                                        <div className={styles.heroBackdropFallback} />
+                                    )}
+                                    <div className={styles.heroBackdropScrimLeft} />
+                                    <div className={styles.heroBackdropScrimBottom} />
                                 </div>
-                            )
-                        })}
-                    </div>
-                </section>
-            )}
+
+                                <div className={styles.heroContent}>
+                                    <div className={styles.heroBadgesRow}>
+                                        <span className={styles.heroRankBadge}>
+                                            <Flame size={13} className={styles.heroRankIcon} />
+                                            #{safeHeroIndex + 1} Trending
+                                        </span>
+                                        {currentHero.vote_average ? (
+                                            <span className={styles.heroRatingBadge}>
+                                                <Star size={13} fill="#fbbf24" stroke="none" />
+                                                {currentHero.vote_average.toFixed(1)}
+                                            </span>
+                                        ) : null}
+                                        <span className={styles.heroMetaBadge}>
+                                            {currentHero.media_type === 'tv' ? 'TV Series' : 'Movie'}
+                                            {releaseYear ? ` · ${releaseYear}` : ''}
+                                        </span>
+                                        {currentHero.service_name && (
+                                            <span className={styles.heroServiceBadge}>
+                                                <ServiceIcon name={currentHero.service_name} style={{ width: 14, height: 14, borderRadius: 3 }} />
+                                                {currentHero.service_name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <h2 className={styles.heroTitle}>{currentHero.items[0]}</h2>
+
+                                    <p className={styles.heroOverview}>{currentHero.overview || 'Popular content trending across major streaming networks.'}</p>
+
+                                    <div className={styles.heroActionsRow}>
+                                        <button
+                                            type="button"
+                                            className={existingHeroItem ? styles.heroBtnInWatchlist : styles.heroBtnPrimary}
+                                            onClick={() => handleHeroWatchlistClick(currentHero, existingHeroItem?.id, existingHeroItem?.status)}
+                                            disabled={heroAdding}
+                                        >
+                                            {heroAdding ? (
+                                                <Loader2 size={16} className={styles.spinIcon} />
+                                            ) : existingHeroItem ? (
+                                                <>
+                                                    <Check size={16} />
+                                                    <span>In Watchlist ({existingHeroItem.status === 'watching' ? 'Watching' : 'Plan to Watch'})</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus size={16} />
+                                                    <span>Add to Watchlist</span>
+                                                </>
+                                            )}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className={styles.heroBtnSecondary}
+                                            onClick={() => handleHeroMoreInfo(currentHero, existingHeroItem)}
+                                        >
+                                            <Info size={16} />
+                                            <span>More Info</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className={styles.heroControlsRow}>
+                                    <div className={styles.heroIndicators}>
+                                        {filteredTrendingRecs.map((_, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                aria-label={`Slide ${idx + 1}`}
+                                                className={`${styles.heroDash} ${idx === safeHeroIndex ? styles.heroDashActive : ''}`}
+                                                onClick={() => setHeroIndex(idx)}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    <div className={styles.heroArrows}>
+                                        <button
+                                            type="button"
+                                            aria-label="Previous slide"
+                                            className={styles.heroArrowBtn}
+                                            onClick={() => setHeroIndex((safeHeroIndex - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length)}
+                                        >
+                                            <ChevronLeft size={18} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            aria-label="Next slide"
+                                            className={styles.heroArrowBtn}
+                                            onClick={() => setHeroIndex((safeHeroIndex + 1) % filteredTrendingRecs.length)}
+                                        >
+                                            <ChevronRight size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Remaining Trending Cards Rail */}
+                        <div className={styles.trendingRailHeader}>
+                            <h3 className={styles.trendingRailTitle}>Explore All Trending ({filteredTrendingRecs.length})</h3>
+                            <div className={styles.carouselControls}>
+                                <button
+                                    onClick={handlePrevTrending}
+                                    disabled={trendingIndex === 0}
+                                    className={styles.carouselBtn}
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <button
+                                    onClick={handleNextTrending}
+                                    disabled={trendingIndex + trendingVisible >= filteredTrendingRecs.length}
+                                    className={styles.carouselBtn}
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div key={trendingTab} className={styles.grid}>
+                            {filteredTrendingRecs.slice(trendingIndex, trendingIndex + trendingVisible).map((rec, index) => {
+                                const tmdbId = rec.tmdb_id || 0;
+                                const existingItem = watchlist.find(w => w.tmdb_id === tmdbId || (w.tmdb_id === 0 && rec.items[0] === 'Title needed')); // Strict ID match preference
+
+                                return (
+                                    <div key={`${trendingIndex}-${index}`} className={styles.recommendationItem}>
+                                        <MediaCard
+                                            item={{
+                                                id: tmdbId,
+                                                dbId: existingItem?.id,
+                                                title: rec.items[0],
+                                                overview: rec.overview || '',
+                                                poster_path: rec.poster_path || '',
+                                                backdrop_path: rec.backdrop_path,
+                                                vote_average: rec.vote_average || 0,
+                                                media_type: rec.media_type || 'movie',
+                                                user_rating: existingItem?.user_rating || 0,
+                                                status: existingItem?.status,
+                                                genre_ids: rec.genre_ids,
+                                                original_language: rec.original_language,
+                                                current_season: existingItem?.current_season,
+                                                current_episode: existingItem?.current_episode,
+                                                notes: existingItem?.notes
+                                            }}
+                                            showServiceBadge={rec.service_name}
+                                            customBadgeColor="#db2777"
+                                            existingStatus={existingItem?.status}
+                                            onAddSuccess={fetchWatchlist}
+                                            onStatusChange={() => fetchWatchlist()}
+                                            onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                );
+            })()}
 
             {/* Unused Subscriptions */}
             {cancelRecs.length > 0 && (
@@ -603,6 +798,26 @@ export default function RecommendationsPage() {
                     );
                 })()}
             </section>
+
+            {detailsModalItem && (
+                <MediaDetailsModal
+                    visible={!!detailsModalItem}
+                    onClose={() => setDetailsModalItem(null)}
+                    mediaType={detailsModalItem.media_type}
+                    tmdbId={detailsModalItem.id}
+                    initialData={{
+                        title: detailsModalItem.title || detailsModalItem.name || '',
+                        poster_path: detailsModalItem.poster_path,
+                        overview: detailsModalItem.overview || '',
+                        vote_average: detailsModalItem.vote_average
+                    }}
+                    dbId={detailsModalItem.dbId}
+                    userRating={detailsModalItem.user_rating}
+                    currentSeason={detailsModalItem.current_season}
+                    currentEpisode={detailsModalItem.current_episode}
+                    notes={detailsModalItem.notes}
+                />
+            )}
 
             <ConfirmationModal
                 isOpen={!!itemToRemove}

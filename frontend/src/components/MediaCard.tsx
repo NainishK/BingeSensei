@@ -18,6 +18,7 @@ export interface MediaItem {
     media_type: string;
     overview: string;
     poster_path?: string;
+    backdrop_path?: string;
     vote_average?: number;
     genre_ids?: number[]; // From Search
     user_rating?: number; // From DB (Watchlist)

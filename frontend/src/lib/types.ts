@@ -36,6 +36,8 @@ export interface Recommendation {
     tmdb_id?: number;
     media_type?: string;
     poster_path?: string;
+    backdrop_path?: string;
+    release_date?: string;
     vote_average?: number;
     overview?: string;
     genre_ids?: number[];
@@ -67,6 +69,8 @@ export interface AIRecommendation {
     tmdb_id?: number;
     media_type?: string;
     poster_path?: string;
+    backdrop_path?: string;
+    release_date?: string;
     vote_average?: number;
     overview?: string;
     logo_url?: string;
