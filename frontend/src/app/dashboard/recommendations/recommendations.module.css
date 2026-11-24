@@ -52,15 +52,7 @@
     margin-bottom: 1.5rem;
 }
 
-/* Filter Pills */
-.filterPills {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
-}
-
+/* Filter Pills & Dropdown */
 .mobileFilterDropdown {
     display: none;
 }
@@ -88,22 +80,22 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, rgba(124, 58, 237, 0.25) 100%);
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 9999px;
-    padding: 0.65rem 1.25rem;
+    background: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.65rem 1.15rem;
     font-size: 0.88rem;
     font-weight: 600;
     cursor: pointer;
     backdrop-filter: blur(8px);
     transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .customDropdownTrigger:hover {
-    border-color: rgba(255, 255, 255, 0.35);
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(124, 58, 237, 0.35) 100%);
+    border-color: rgba(99, 102, 241, 0.4);
+    background: var(--accent);
 }
 
 .triggerContent {
@@ -114,7 +106,7 @@
 
 .dropdownChevron {
     transition: transform 0.2s ease;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--muted-foreground);
 }
 
 .chevronOpen {
@@ -127,12 +119,11 @@
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
     padding: 0.4rem;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
     animation: fadeInDropdown 0.15s ease-out;
 }
 
@@ -153,7 +144,7 @@
     justify-content: space-between;
     padding: 0.65rem 1rem;
     border-radius: 10px;
-    color: #94a3b8;
+    color: var(--muted-foreground);
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
@@ -161,13 +152,13 @@
 }
 
 .customDropdownItem:hover {
-    background: rgba(99, 102, 241, 0.18);
-    color: #ffffff;
+    background: var(--accent);
+    color: var(--foreground);
 }
 
 .selectedItem {
-    background: rgba(99, 102, 241, 0.25);
-    color: #ffffff !important;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--foreground) !important;
 }
 
 .itemLeft {
@@ -181,39 +172,128 @@
     opacity: 0.7;
 }
 
+.filterPills {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+:global([data-theme='dark']) .filterPills {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
 .filterPill {
-    background: var(--muted, rgba(255, 255, 255, 0.05));
-    color: var(--muted-foreground, #94a3b8);
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-    border-radius: 9999px;
-    padding: 0.45rem 1rem;
+    background: transparent;
+    color: var(--muted-foreground);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 0.45rem 0.85rem;
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
     user-select: none;
     outline: none;
+    white-space: nowrap;
 }
 
 .filterPill:hover:not(.filterPillActive) {
-    background: rgba(255, 255, 255, 0.12);
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
 }
 
 .filterPill:active {
-    transform: scale(0.96);
+    transform: scale(0.98);
 }
 
 .filterPillActive {
-    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-    color: #ffffff !important;
-    border: 1px solid #3b82f6;
-    box-shadow: none;
+    background: var(--card);
+    color: var(--foreground) !important;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+:global([data-theme='dark']) .filterPillActive {
+    background: #181b2a;
+    border-color: rgba(99, 102, 241, 0.45);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Colored Icon Accents (Consistent with Profile) ── */
+.iconRecsAll {
+    color: #0284c7;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+:global([data-theme='dark']) .iconRecsAll {
+    color: #38bdf8;
+}
+
+.iconRecsSubs {
+    color: #059669;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+:global([data-theme='dark']) .iconRecsSubs {
+    color: #34d399;
+}
+
+.iconRecsExplore {
+    color: #7c3aed;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+:global([data-theme='dark']) .iconRecsExplore {
+    color: #a78bfa;
+}
+
+.filterPill:hover .iconRecsAll,
+.filterPill:hover .iconRecsSubs,
+.filterPill:hover .iconRecsExplore {
+    transform: scale(1.15);
+}
+
+.pillLabel {
+    display: inline-block;
+}
+
+.pillCount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--muted-foreground);
+    transition: all 0.2s ease;
+}
+
+.filterPillActive .pillCount {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+}
+
+:global([data-theme='dark']) .filterPillActive .pillCount {
+    background: rgba(99, 102, 241, 0.22);
+    color: #a5b4fc;
 }
 
 .grid {

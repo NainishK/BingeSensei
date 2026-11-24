@@ -54,7 +54,8 @@ function CustomFilterDropdown({
                 >
                     <div className={styles.triggerContent}>
                         {activeOption.icon}
-                        <span>{activeOption.label} ({activeOption.count})</span>
+                        <span>{activeOption.label}</span>
+                        <span className={styles.pillCount}>{activeOption.count}</span>
                     </div>
                     <ChevronDown size={16} className={`${styles.dropdownChevron} ${isOpen ? styles.chevronOpen : ''}`} />
                 </button>
@@ -74,7 +75,7 @@ function CustomFilterDropdown({
                                     {opt.icon}
                                     <span>{opt.label}</span>
                                 </div>
-                                <span className={styles.itemCount}>({opt.count})</span>
+                                <span className={styles.pillCount}>{opt.count}</span>
                             </div>
                         ))}
                     </div>
@@ -289,9 +290,24 @@ export default function RecommendationsPage() {
                             setTrendingIndex(0);
                         }}
                         options={[
-                            { value: 'all', label: 'All Trending', count: trendingRecs.length, icon: <Layers size={14} /> },
-                            { value: 'subscriptions', label: 'On My Subscriptions', count: trendingSubCount, icon: <Tv size={14} /> },
-                            { value: 'explore', label: 'Worldwide & Explore', count: trendingExploreCount, icon: <Globe size={14} /> },
+                            { 
+                                value: 'all', 
+                                label: 'All Trending', 
+                                count: trendingRecs.length, 
+                                icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
+                            },
+                            { 
+                                value: 'subscriptions', 
+                                label: 'On My Subscriptions', 
+                                count: trendingSubCount, 
+                                icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
+                            },
+                            { 
+                                value: 'explore', 
+                                label: 'Worldwide & Explore', 
+                                count: trendingExploreCount, 
+                                icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
+                            },
                         ]}
                     />
 
@@ -301,19 +317,25 @@ export default function RecommendationsPage() {
                             className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
                             onClick={() => { setTrendingTab('all'); setTrendingIndex(0); }}
                         >
-                            <Layers size={14} /> All Trending ({trendingRecs.length})
+                            <span className={styles.iconRecsAll}><Layers size={14} /></span>
+                            <span className={styles.pillLabel}>All Trending</span>
+                            <span className={styles.pillCount}>{trendingRecs.length}</span>
                         </button>
                         <button
                             className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
                             onClick={() => { setTrendingTab('subscriptions'); setTrendingIndex(0); }}
                         >
-                            <Tv size={14} /> On My Subscriptions ({trendingSubCount})
+                            <span className={styles.iconRecsSubs}><Tv size={14} /></span>
+                            <span className={styles.pillLabel}>On My Subscriptions</span>
+                            <span className={styles.pillCount}>{trendingSubCount}</span>
                         </button>
                         <button
                             className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
                             onClick={() => { setTrendingTab('explore'); setTrendingIndex(0); }}
                         >
-                            <Globe size={14} /> Worldwide & Explore ({trendingExploreCount})
+                            <span className={styles.iconRecsExplore}><Globe size={14} /></span>
+                            <span className={styles.pillLabel}>Worldwide & Explore</span>
+                            <span className={styles.pillCount}>{trendingExploreCount}</span>
                         </button>
                     </div>
 
@@ -468,9 +490,24 @@ export default function RecommendationsPage() {
                                         value={filterTab}
                                         onChange={(val) => setFilterTab(val)}
                                         options={[
-                                            { value: 'all', label: 'All Picks', count: similarRecs.length, icon: <Layers size={14} /> },
-                                            { value: 'subscriptions', label: 'On My Subscriptions', count: subCount, icon: <Tv size={14} /> },
-                                            { value: 'explore', label: 'Worldwide & Explore', count: exploreCount, icon: <Globe size={14} /> },
+                                            { 
+                                                value: 'all', 
+                                                label: 'All Picks', 
+                                                count: similarRecs.length, 
+                                                icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
+                                            },
+                                            { 
+                                                value: 'subscriptions', 
+                                                label: 'On My Subscriptions', 
+                                                count: subCount, 
+                                                icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
+                                            },
+                                            { 
+                                                value: 'explore', 
+                                                label: 'Worldwide & Explore', 
+                                                count: exploreCount, 
+                                                icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
+                                            },
                                         ]}
                                     />
 
@@ -480,19 +517,25 @@ export default function RecommendationsPage() {
                                             className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
                                             onClick={() => setFilterTab('all')}
                                         >
-                                            <Layers size={14} /> All Picks ({similarRecs.length})
+                                            <span className={styles.iconRecsAll}><Layers size={14} /></span>
+                                            <span className={styles.pillLabel}>All Picks</span>
+                                            <span className={styles.pillCount}>{similarRecs.length}</span>
                                         </button>
                                         <button
                                             className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
                                             onClick={() => setFilterTab('subscriptions')}
                                         >
-                                            <Tv size={14} /> On My Subscriptions ({subCount})
+                                            <span className={styles.iconRecsSubs}><Tv size={14} /></span>
+                                            <span className={styles.pillLabel}>On My Subscriptions</span>
+                                            <span className={styles.pillCount}>{subCount}</span>
                                         </button>
                                         <button
                                             className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
                                             onClick={() => setFilterTab('explore')}
                                         >
-                                            <Globe size={14} /> Worldwide & Explore ({exploreCount})
+                                            <span className={styles.iconRecsExplore}><Globe size={14} /></span>
+                                            <span className={styles.pillLabel}>Worldwide & Explore</span>
+                                            <span className={styles.pillCount}>{exploreCount}</span>
                                         </button>
                                     </div>
                                 </>
