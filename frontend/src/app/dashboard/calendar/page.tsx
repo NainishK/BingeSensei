@@ -15,7 +15,9 @@ import {
     ChevronDown,
     ChevronUp,
     Check,
-    X
+    X,
+    Clock,
+    AlertCircle
 } from 'lucide-react';
 import { ActivityDrop } from '@/components/ReleaseReel';
 import { ServiceIcon } from '@/components/ServiceIcon';
@@ -30,6 +32,9 @@ interface ValueScorecardItem {
     drop_count: number;
     value_label: string;
     suggested_action: string;
+    subscription_status?: string;
+    next_billing_date?: string;
+    days_left?: number;
 }
 
 interface CalendarEvent {
@@ -395,10 +400,24 @@ export default function CalendarPage() {
                             <div className={styles.legendRightGroup}>
                                 <div
                                     className={styles.legendActiveSubPill}
-                                    title="Cards with a green left border are streaming on services you actively subscribe to"
+                                    title="Streaming on services with an active subscription"
                                 >
                                     <span className={styles.legendActiveSubDot} />
-                                    <span>Streaming on Active Sub</span>
+                                    <span>Active Sub</span>
+                                </div>
+                                <div
+                                    className={styles.legendDueSoonPill}
+                                    title="Streaming on services renewing within 7 days"
+                                >
+                                    <span className={styles.legendDueSoonDot} />
+                                    <span>Due Soon</span>
+                                </div>
+                                <div
+                                    className={styles.legendExpiredPill}
+                                    title="Streaming on services with an expired subscription"
+                                >
+                                    <span className={styles.legendExpiredDot} />
+                                    <span>Expired Sub</span>
                                 </div>
                             </div>
                         </div>
@@ -409,17 +428,45 @@ export default function CalendarPage() {
                 {showScorecards && data?.value_scorecard && (
                     <div className={styles.scorecardDrawer}>
                         {data.value_scorecard.map((item) => {
-                            const badgeClass =
-                                item.value_label === 'High Value'
-                                    ? styles.badgeHigh
-                                    : item.value_label === 'Moderate Value'
-                                    ? styles.badgeModerate
-                                    : item.value_label === 'Low Value'
-                                    ? styles.badgeLow
-                                    : styles.badgeIdle;
+                            const isExpired = item.subscription_status === 'expired' || item.value_label.toLowerCase().includes('expired');
+                            const isDueSoon = item.subscription_status === 'due_soon' || item.value_label.toLowerCase().includes('due soon');
+
+                            const cardBorderClass = isExpired
+                                ? styles.scorecardExpired
+                                : isDueSoon
+                                ? styles.scorecardDueSoon
+                                : styles.scorecardActive;
+
+                            const badgeClass = isExpired
+                                ? styles.badgeExpired
+                                : isDueSoon
+                                ? styles.badgeDueSoon
+                                : item.value_label === 'High Value'
+                                ? styles.badgeHigh
+                                : item.value_label === 'Moderate Value' || item.value_label === 'Binge Window'
+                                ? styles.badgeModerate
+                                : item.value_label === 'Low Value'
+                                ? styles.badgeLow
+                                : styles.badgeIdle;
+
+                            const statusClass = isExpired
+                                ? styles.statusExpired
+                                : isDueSoon
+                                ? styles.statusDueSoon
+                                : styles.statusActive;
+
+                            const statusText = isExpired
+                                ? 'Expired'
+                                : isDueSoon
+                                ? (item.days_left !== undefined && item.days_left !== null
+                                    ? (item.days_left === 0 ? 'Renews Today' : `Renews in ${item.days_left}d`)
+                                    : 'Due Soon')
+                                : 'Active';
+
+                            const isYearly = item.billing_cycle?.toLowerCase() === 'yearly' || item.billing_cycle?.toLowerCase() === 'annual';
 
                             return (
-                                <div key={`${item.id}-${item.service_name}`} className={styles.scorecard}>
+                                <div key={`${item.id}-${item.service_name}`} className={`${styles.scorecard} ${cardBorderClass}`}>
                                     <div className={styles.scorecardTop}>
                                         <div className={styles.scorecardServiceGroup}>
                                             <ServiceIcon
@@ -428,18 +475,18 @@ export default function CalendarPage() {
                                             />
                                             <span className={styles.scorecardService}>{item.service_name}</span>
                                         </div>
-                                        {(() => {
-                                            const isYearly = item.billing_cycle?.toLowerCase() === 'yearly' || item.billing_cycle?.toLowerCase() === 'annual';
-                                            return (
-                                                <span className={styles.scorecardCost}>
-                                                    {item.cost.toFixed(2)} {item.currency}{isYearly ? '/yr' : '/mo'}
-                                                </span>
-                                            );
-                                        })()}
+                                        <span className={styles.scorecardCost}>
+                                            {item.cost.toFixed(2)} {item.currency}{isYearly ? '/yr' : '/mo'}
+                                        </span>
                                     </div>
-                                    <span className={`${styles.scorecardBadge} ${badgeClass}`}>
-                                        {item.drop_count} drops · {item.value_label}
-                                    </span>
+                                    <div className={styles.scorecardBadgesRow}>
+                                        <span className={`${styles.scorecardStatusBadge} ${statusClass}`}>
+                                            {statusText}
+                                        </span>
+                                        <span className={`${styles.scorecardBadge} ${badgeClass}`}>
+                                            {item.drop_count} {item.drop_count === 1 ? 'drop' : 'drops'} · {item.value_label}
+                                        </span>
+                                    </div>
                                     <div className={styles.scorecardAction}>{item.suggested_action}</div>
                                 </div>
                             );
@@ -507,61 +554,104 @@ export default function CalendarPage() {
                                     )}
                                 </div>
 
-                                {/* Episode Drop Cards Stack (Max 2 cards visible to keep grid perfectly balanced) */}
+                                 {/* Episode Drop Cards Stack (Max 2 cards visible to keep grid perfectly balanced) */}
                                 <div className={styles.cellDropsStack}>
-                                    {cell.drops.slice(0, 2).map((drop, dropIdx) => (
-                                        <div
-                                            key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
-                                            className={`
-                                                ${styles.gridDropCard}
-                                                ${drop.is_on_active_subscription ? styles.gridDropCardActiveSub : ''}
-                                            `}
-                                            onClick={() => setSelectedDrop(drop)}
-                                            title={`${drop.title} · Season ${drop.season_number} Episode ${drop.episode_number || 1}${
-                                                drop.available_on ? ' on ' + drop.available_on : ''
-                                            }${drop.is_on_active_subscription ? ' (Included in your active subscription)' : ''}`}
-                                        >
-                                            {drop.poster_path ? (
-                                                /* eslint-disable-next-line @next/next/no-img-element */
-                                                <img
-                                                    src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
-                                                    alt={drop.title}
-                                                    className={styles.cardMiniPoster}
-                                                    loading="lazy"
-                                                />
-                                            ) : (
-                                                <div className={styles.cardMiniPosterPlaceholder}>
-                                                    <Tv size={13} color="#71717a" />
-                                                </div>
-                                            )}
-                                            <div className={styles.cardDetails}>
-                                                <span className={styles.cardShowTitle}>{drop.title}</span>
-                                                <span className={styles.cardEpTag}>
-                                                    S{drop.season_number || 1}
-                                                    {drop.episode_number ? ` · E${drop.episode_number}` : ''}
-                                                </span>
-                                                <div className={styles.cardProviderRow}>
-                                                    {drop.available_on ? (
-                                                        <span
-                                                            className={drop.is_on_active_subscription ? styles.cardProviderActive : styles.cardProviderNeutral}
-                                                            title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
-                                                        >
-                                                            <ServiceIcon
-                                                                name={drop.available_on}
-                                                                style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
-                                                            />
-                                                            <span className={styles.providerName}>{drop.available_on}</span>
-                                                            {drop.is_on_active_subscription && (
-                                                                <Check size={9} strokeWidth={3} />
-                                                            )}
-                                                        </span>
-                                                    ) : (
-                                                        <span className={styles.cardNoProvider}>Airing TBA</span>
-                                                    )}
+                                    {cell.drops.slice(0, 2).map((drop, dropIdx) => {
+                                        const cardStatusClass =
+                                            drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)
+                                                ? styles.gridDropCardActiveSub
+                                                : drop.subscription_status === 'due_soon'
+                                                ? styles.gridDropCardDueSoon
+                                                : drop.subscription_status === 'expired'
+                                                ? styles.gridDropCardExpired
+                                                : '';
+
+                                        const providerClass =
+                                            drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)
+                                                ? styles.cardProviderActive
+                                                : drop.subscription_status === 'due_soon'
+                                                ? styles.cardProviderDueSoon
+                                                : drop.subscription_status === 'expired'
+                                                ? styles.cardProviderExpired
+                                                : styles.cardProviderNeutral;
+
+                                        const providerTitle =
+                                            drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)
+                                                ? `Included in your active ${drop.available_on} plan`
+                                                : drop.subscription_status === 'due_soon'
+                                                ? `Renews soon on ${drop.available_on}`
+                                                : drop.subscription_status === 'expired'
+                                                ? `Subscription expired on ${drop.available_on} - renew to stream`
+                                                : `Available on ${drop.available_on}`;
+
+                                        return (
+                                            <div
+                                                key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${dropIdx}`}
+                                                className={`
+                                                    ${styles.gridDropCard}
+                                                    ${cardStatusClass}
+                                                `}
+                                                onClick={() => setSelectedDrop(drop)}
+                                                title={`${drop.title} · Season ${drop.season_number} Episode ${drop.episode_number || 1}${
+                                                    drop.available_on ? ' on ' + drop.available_on : ''
+                                                }${
+                                                    drop.subscription_status === 'active'
+                                                        ? ' (Active subscription)'
+                                                        : drop.subscription_status === 'due_soon'
+                                                        ? ' (Renewal due soon)'
+                                                        : drop.subscription_status === 'expired'
+                                                        ? ' (Subscription expired)'
+                                                        : ''
+                                                }`}
+                                            >
+                                                {drop.poster_path ? (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                    <img
+                                                        src={`https://image.tmdb.org/t/p/w92${drop.poster_path}`}
+                                                        alt={drop.title}
+                                                        className={styles.cardMiniPoster}
+                                                        loading="lazy"
+                                                    />
+                                                ) : (
+                                                    <div className={styles.cardMiniPosterPlaceholder}>
+                                                        <Tv size={13} color="#71717a" />
+                                                    </div>
+                                                )}
+                                                <div className={styles.cardDetails}>
+                                                    <span className={styles.cardShowTitle}>{drop.title}</span>
+                                                    <span className={styles.cardEpTag}>
+                                                        S{drop.season_number || 1}
+                                                        {drop.episode_number ? ` · E${drop.episode_number}` : ''}
+                                                    </span>
+                                                    <div className={styles.cardProviderRow}>
+                                                        {drop.available_on ? (
+                                                            <span
+                                                                className={providerClass}
+                                                                title={providerTitle}
+                                                            >
+                                                                <ServiceIcon
+                                                                    name={drop.available_on}
+                                                                    style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
+                                                                />
+                                                                <span className={styles.providerName}>{drop.available_on}</span>
+                                                                {(drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)) && (
+                                                                    <Check size={9} strokeWidth={3} />
+                                                                )}
+                                                                {drop.subscription_status === 'due_soon' && (
+                                                                    <Clock size={9} strokeWidth={2.5} />
+                                                                )}
+                                                                {drop.subscription_status === 'expired' && (
+                                                                    <AlertCircle size={9} strokeWidth={2.5} />
+                                                                )}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={styles.cardNoProvider}>Airing TBA</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
 
                                     {/* +N More Drops Pill */}
                                     {cell.drops.length > 2 && (
@@ -611,7 +701,9 @@ export default function CalendarPage() {
                                         <div
                                             className={`
                                                 ${styles.mobileDropsPill}
-                                                ${cell.drops.some(d => d.is_on_active_subscription) ? styles.mobileDropsPillActive : ''}
+                                                ${cell.drops.some(d => d.subscription_status === 'active' || (d.is_on_active_subscription && !d.subscription_status)) ? styles.mobileDropsPillActive : ''}
+                                                ${cell.drops.some(d => d.subscription_status === 'due_soon') ? styles.mobileDropsPillDueSoon : ''}
+                                                ${cell.drops.some(d => d.subscription_status === 'expired') ? styles.mobileDropsPillExpired : ''}
                                             `}
                                         >
                                             <span className={styles.mobileDropsCount}>{cell.drops.length}</span>
@@ -682,12 +774,36 @@ export default function CalendarPage() {
                                                         {drop.episode_name ? `: "${drop.episode_name}"` : ''}
                                                     </div>
                                                     {drop.available_on && (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.75rem', color: '#10b981', fontWeight: 600 }}>
+                                                        <div
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 5,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                color: drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)
+                                                                    ? '#10b981'
+                                                                    : drop.subscription_status === 'due_soon'
+                                                                    ? '#f59e0b'
+                                                                    : drop.subscription_status === 'expired'
+                                                                    ? '#f87171'
+                                                                    : '#a1a1aa'
+                                                            }}
+                                                        >
                                                             <ServiceIcon
                                                                 name={drop.available_on}
                                                                 style={{ width: 13, height: 13, borderRadius: 2.5, objectFit: 'cover' }}
                                                             />
                                                             <span>{drop.available_on}</span>
+                                                            {(drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)) && (
+                                                                <Check size={10} strokeWidth={3} />
+                                                            )}
+                                                            {drop.subscription_status === 'due_soon' && (
+                                                                <Clock size={10} strokeWidth={2.5} />
+                                                            )}
+                                                            {drop.subscription_status === 'expired' && (
+                                                                <AlertCircle size={10} strokeWidth={2.5} />
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
@@ -757,15 +873,21 @@ export default function CalendarPage() {
                                     <span
                                         className={`
                                             ${styles.cinematicBadge}
-                                            ${selectedDrop.is_on_active_subscription ? styles.cinematicBadgeActiveSub : ''}
+                                            ${selectedDrop.subscription_status === 'active' || (selectedDrop.is_on_active_subscription && !selectedDrop.subscription_status) ? styles.cinematicBadgeActiveSub : ''}
+                                            ${selectedDrop.subscription_status === 'due_soon' ? styles.cinematicBadgeDueSoon : ''}
+                                            ${selectedDrop.subscription_status === 'expired' ? styles.cinematicBadgeExpired : ''}
                                         `}
                                     >
                                         <ServiceIcon
                                             name={selectedDrop.available_on}
                                             style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover' }}
                                         />
-                                        {selectedDrop.is_on_active_subscription
-                                            ? `Streaming on your ${selectedDrop.available_on}`
+                                        {selectedDrop.subscription_status === 'active' || (selectedDrop.is_on_active_subscription && !selectedDrop.subscription_status)
+                                            ? `Streaming on your active ${selectedDrop.available_on}`
+                                            : selectedDrop.subscription_status === 'due_soon'
+                                            ? `Due soon on ${selectedDrop.available_on}`
+                                            : selectedDrop.subscription_status === 'expired'
+                                            ? `Subscription expired on ${selectedDrop.available_on}`
                                             : `Available on ${selectedDrop.available_on}`}
                                     </span>
                                 )}
@@ -849,7 +971,9 @@ export default function CalendarPage() {
                                     key={`${drop.item_id}-${drop.season_number}-${drop.episode_number}-${idx}`}
                                     className={`
                                         ${styles.dayModalCard}
-                                        ${drop.is_on_active_subscription ? styles.dayModalCardActiveSub : ''}
+                                        ${drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status) ? styles.dayModalCardActiveSub : ''}
+                                        ${drop.subscription_status === 'due_soon' ? styles.dayModalCardDueSoon : ''}
+                                        ${drop.subscription_status === 'expired' ? styles.dayModalCardExpired : ''}
                                     `}
                                 >
                                     {drop.poster_path ? (
@@ -877,7 +1001,9 @@ export default function CalendarPage() {
                                                 <span
                                                     className={`
                                                         ${styles.dayModalSubPill}
-                                                        ${drop.is_on_active_subscription ? styles.dayModalSubPillActive : ''}
+                                                        ${drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status) ? styles.dayModalSubPillActive : ''}
+                                                        ${drop.subscription_status === 'due_soon' ? styles.dayModalSubPillDueSoon : ''}
+                                                        ${drop.subscription_status === 'expired' ? styles.dayModalSubPillExpired : ''}
                                                     `}
                                                 >
                                                     <ServiceIcon
@@ -885,9 +1011,19 @@ export default function CalendarPage() {
                                                         style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }}
                                                     />
                                                     <span className={styles.dayModalSubName}>{drop.available_on}</span>
-                                                    {drop.is_on_active_subscription && (
+                                                    {(drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)) && (
                                                         <span className={styles.dayModalActiveCheck} title="Active subscription">
                                                             <Check size={11} strokeWidth={3} />
+                                                        </span>
+                                                    )}
+                                                    {drop.subscription_status === 'due_soon' && (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', color: '#f59e0b', marginLeft: 1 }} title="Renews soon">
+                                                            <Clock size={11} strokeWidth={2.5} />
+                                                        </span>
+                                                    )}
+                                                    {drop.subscription_status === 'expired' && (
+                                                        <span style={{ display: 'inline-flex', alignItems: 'center', color: '#f87171', marginLeft: 1 }} title="Subscription expired">
+                                                            <AlertCircle size={11} strokeWidth={2.5} />
                                                         </span>
                                                     )}
                                                 </span>

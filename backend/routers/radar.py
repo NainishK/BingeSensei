@@ -28,6 +28,36 @@ def is_provider_in_subs(available_on: str | None, active_services: set[str]) -> 
             return True
     return False
 
+def get_sub_status(sub: models.Subscription, today: date) -> tuple[str, int | None]:
+    """Calculate subscription status: 'active', 'due_soon', or 'expired'."""
+    if not sub.is_active:
+        diff_days = (sub.next_billing_date - today).days if sub.next_billing_date else None
+        return "expired", diff_days
+    if not sub.next_billing_date:
+        return "active", None
+    diff_days = (sub.next_billing_date - today).days
+    if diff_days < 0:
+        return "expired", diff_days
+    elif diff_days <= 7:
+        return "due_soon", diff_days
+    else:
+        return "active", diff_days
+
+def get_provider_sub_status(
+    available_on: str | None,
+    service_status_map: dict[str, tuple[str, int | None, models.Subscription]]
+) -> tuple[str, int | None, models.Subscription | None]:
+    """
+    Returns (status, days_left, subscription) where status is 'active', 'due_soon', 'expired', or 'none'.
+    """
+    if not available_on or not service_status_map:
+        return "none", None, None
+    avail_lower = available_on.lower().strip()
+    for s_name, (st, days, sub_obj) in service_status_map.items():
+        if s_name in avail_lower or avail_lower in s_name:
+            return st, days, sub_obj
+    return "none", None, None
+
 def sync_show_release_info(db: Session, item: models.WatchlistItem):
     """Sync single TV show's release metadata from TMDB."""
     if item.media_type != "tv":
@@ -140,13 +170,25 @@ def get_activity_drops(
     today = date.today()
     target_country = (country or current_user.country or "US").upper().strip()
 
-    active_subs = db.query(models.Subscription).filter(
+    user_subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
-        models.Subscription.is_active == True,
         models.Subscription.country == target_country,
         (models.Subscription.category == None) | (models.Subscription.category == "OTT")
     ).all()
-    active_services = {s.service_name.lower().strip() for s in active_subs}
+
+    status_priority = {"active": 3, "due_soon": 2, "expired": 1}
+    service_status_map: dict[str, tuple[str, int | None, models.Subscription]] = {}
+    for s in user_subs:
+        st, days = get_sub_status(s, today)
+        s_norm = s.service_name.lower().strip()
+        if s_norm not in service_status_map:
+            service_status_map[s_norm] = (st, days, s)
+        else:
+            prev_st, _, _ = service_status_map[s_norm]
+            if status_priority.get(st, 0) > status_priority.get(prev_st, 0):
+                service_status_map[s_norm] = (st, days, s)
+
+    active_services = {s_name for s_name, (st, _, _) in service_status_map.items() if st in ("active", "due_soon")}
 
     watchlist_items = db.query(models.WatchlistItem).filter(
         models.WatchlistItem.user_id == current_user.id
@@ -162,7 +204,8 @@ def get_activity_drops(
     seen_reel_ids = set()
 
     for item in watchlist_items:
-        is_sub_match = is_provider_in_subs(item.available_on, active_services)
+        sub_status, sub_days, _ = get_provider_sub_status(item.available_on, service_status_map)
+        is_sub_match = (sub_status in ("active", "due_soon"))
 
         # 1. Resurrected Shows: Marked 'watched', but a brand-new season has since premiered!
         if radar_settings.notify_watched_resurrect and item.media_type == "tv" and item.status == "watched":
@@ -199,6 +242,7 @@ def get_activity_drops(
                     poster_path=item.poster_path,
                     available_on=item.available_on,
                     is_on_active_subscription=is_sub_match,
+                    subscription_status=sub_status,
                     drop_type="resurrected",
                     season_number=item.last_episode_season or item.next_episode_season,
                     episode_number=item.last_episode_number or item.next_episode_number,
@@ -236,6 +280,7 @@ def get_activity_drops(
                             poster_path=item.poster_path,
                             available_on=item.available_on,
                             is_on_active_subscription=is_sub_match,
+                            subscription_status=sub_status,
                             drop_type=drop_type,
                             season_number=item.last_episode_season,
                             episode_number=item.last_episode_number,
@@ -268,6 +313,7 @@ def get_activity_drops(
                             poster_path=item.poster_path,
                             available_on=item.available_on,
                             is_on_active_subscription=is_sub_match,
+                            subscription_status=sub_status,
                             drop_type=drop_type,
                             season_number=item.next_episode_season,
                             episode_number=item.next_episode_number,
@@ -296,6 +342,7 @@ def get_activity_drops(
                     poster_path=item.poster_path,
                     available_on=item.available_on,
                     is_on_active_subscription=True,
+                    subscription_status=sub_status,
                     drop_type="new_season",
                     season_number=1,
                     episode_name=f"Streaming on {item.available_on}",
@@ -382,14 +429,25 @@ def get_calendar(
 
     month_str = month or f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
 
-    active_subs = db.query(models.Subscription).filter(
+    user_subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
-        models.Subscription.is_active == True,
         models.Subscription.country == target_country,
         (models.Subscription.category == None) | (models.Subscription.category == "OTT")
     ).all()
-    active_services = {s.service_name.lower().strip(): s for s in active_subs}
 
+    status_priority = {"active": 3, "due_soon": 2, "expired": 1}
+    service_status_map: dict[str, tuple[str, int | None, models.Subscription]] = {}
+    for s in user_subs:
+        st, days = get_sub_status(s, today)
+        s_norm = s.service_name.lower().strip()
+        if s_norm not in service_status_map:
+            service_status_map[s_norm] = (st, days, s)
+        else:
+            prev_st, _, _ = service_status_map[s_norm]
+            if status_priority.get(st, 0) > status_priority.get(prev_st, 0):
+                service_status_map[s_norm] = (st, days, s)
+
+    active_subs = [s for s in user_subs if s.is_active]
     items = db.query(models.WatchlistItem).filter(
         models.WatchlistItem.user_id == current_user.id,
         models.WatchlistItem.media_type == "tv"
@@ -429,7 +487,8 @@ def get_calendar(
 
     events_by_date: dict[str, list[schemas.ActivityDrop]] = {}
     service_distribution: dict[str, int] = {}
-    service_drops_count: dict[str, int] = {s.service_name: 0 for s in active_subs}
+    service_drops_count: dict[str, int] = {s.service_name: 0 for s in user_subs}
+    service_upcoming_drops_count: dict[str, int] = {s.service_name: 0 for s in user_subs}
     seen_episodes: set[tuple[int, int, int]] = set()
 
     for item in items:
@@ -437,7 +496,8 @@ def get_calendar(
         if item.status == "dropped" and not item.is_followed:
             continue
 
-        is_sub_match = is_provider_in_subs(item.available_on, set(active_services.keys()))
+        sub_status, sub_days, sub_obj = get_provider_sub_status(item.available_on, service_status_map)
+        is_sub_match = (sub_status in ("active", "due_soon"))
 
         # 1. Fetch detailed season episodes for active/recent shows
         found_season_drops = False
@@ -479,6 +539,7 @@ def get_calendar(
                             poster_path=item.poster_path,
                             available_on=item.available_on,
                             is_on_active_subscription=is_sub_match,
+                            subscription_status=sub_status,
                             drop_type=drop_type,
                             season_number=ep_s_num,
                             episode_number=ep_num,
@@ -498,6 +559,8 @@ def get_calendar(
                             for s_name in service_drops_count:
                                 if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
                                     service_drops_count[s_name] += 1
+                                    if diff >= 0:
+                                        service_upcoming_drops_count[s_name] += 1
 
         # 2. Fallback to single last_air_date / next_air_date if season episodes returned no hits
         if not found_season_drops:
@@ -517,6 +580,7 @@ def get_calendar(
                         poster_path=item.poster_path,
                         available_on=item.available_on,
                         is_on_active_subscription=is_sub_match,
+                        subscription_status=sub_status,
                         drop_type="new_season" if item.last_episode_number == 1 else "new_episode",
                         season_number=item.last_episode_season,
                         episode_number=item.last_episode_number,
@@ -535,6 +599,8 @@ def get_calendar(
                         for s_name in service_drops_count:
                             if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
                                 service_drops_count[s_name] += 1
+                                if diff >= 0:
+                                    service_upcoming_drops_count[s_name] += 1
 
             if item.next_air_date and start_date <= item.next_air_date <= end_date:
                 ep_s = item.next_episode_season or 1
@@ -552,6 +618,7 @@ def get_calendar(
                         poster_path=item.poster_path,
                         available_on=item.available_on,
                         is_on_active_subscription=is_sub_match,
+                        subscription_status=sub_status,
                         drop_type="new_season" if item.next_episode_number == 1 else "upcoming",
                         season_number=item.next_episode_season,
                         episode_number=item.next_episode_number,
@@ -569,47 +636,103 @@ def get_calendar(
                         for s_name in service_drops_count:
                             if s_name.lower() in item.available_on.lower() or item.available_on.lower() in s_name.lower():
                                 service_drops_count[s_name] += 1
+                                if diff >= 0:
+                                    service_upcoming_drops_count[s_name] += 1
 
     events = [
         schemas.CalendarEvent(date=d, drops=drops)
         for d, drops in sorted(events_by_date.items())
     ]
 
-    # Calculate Value Scorecard for active subscriptions
+    # Calculate Value Scorecard for subscriptions
     value_scorecard: list[schemas.ValueScorecardItem] = []
     seen_services = set()
-    for sub in active_subs:
+    for sub in user_subs:
         s_norm = sub.service_name.lower().strip()
         if s_norm in seen_services:
             continue
         seen_services.add(s_norm)
         drops_cnt = service_drops_count.get(sub.service_name, 0)
+        upcoming_cnt = service_upcoming_drops_count.get(sub.service_name, 0)
         cycle = (sub.billing_cycle or "monthly").lower().strip()
         is_yearly = cycle in ("yearly", "annual")
         monthly_equiv = sub.cost / 12.0 if is_yearly else sub.cost
+        sub_status, days_left = get_sub_status(sub, today)
 
-        if drops_cnt >= 5:
-            label = "High Value"
-            action = "Keep Active: Great content drop volume this month."
-        elif drops_cnt >= 2:
-            if radar_settings.viewing_preference == "binge" and not is_yearly:
-                label = "Binge Window"
-                action = f"Binge Strategy: {drops_cnt} episodic drops airing. Safe to pause and binge when complete."
-            else:
+        if sub_status == "expired":
+            if drops_cnt >= 6:
+                label = "High Value"
+                action = f"Subscription expired: {drops_cnt} drops airing on {sub.service_name}. Renew to watch."
+            elif drops_cnt >= 4:
                 label = "Moderate Value"
-                action = "Keep Active: Steady weekly releases."
-        elif drops_cnt == 1:
-            label = "Low Value"
-            if is_yearly:
-                action = f"Annual plan active: Light drop schedule this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+                action = f"Subscription expired: {drops_cnt} drops airing on {sub.service_name}. Renew to watch."
+            elif drops_cnt >= 2:
+                label = "Low Value"
+                action = f"Subscription expired: Only {drops_cnt} drops this month. Safe to keep paused until more episodes accumulate."
+            elif drops_cnt == 1:
+                label = "Low Value"
+                action = f"Subscription expired: Only 1 drop this month. Safe to keep paused."
             else:
-                action = "Consider Binge Window: pause now and binge when season concludes."
-        else:
-            label = "Idle / Safe to Pause"
-            if is_yearly:
-                action = f"Annual plan active: 0 drops scheduled this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+                label = "Idle / Keep Paused"
+                action = "Subscription expired: 0 drops scheduled. Safe to keep paused."
+        elif sub_status == "due_soon":
+            days_str = f"in {days_left}d" if days_left is not None and days_left > 0 else ("today" if days_left == 0 else "")
+            if upcoming_cnt >= 6:
+                label = "High Value"
+                action = f"Renews {days_str}: {upcoming_cnt} upcoming drops scheduled. Keep active to stream without interruption."
+            elif upcoming_cnt >= 4:
+                label = "Moderate Value"
+                action = f"Renews {days_str}: {upcoming_cnt} upcoming drops scheduled. Keep active for upcoming episodes."
+            elif upcoming_cnt >= 2:
+                label = "Low Value"
+                if is_yearly:
+                    action = f"Annual plan renews {days_str}: Light schedule ({upcoming_cnt} upcoming drops)."
+                else:
+                    action = f"Renews {days_str}: Only {upcoming_cnt} upcoming drops. Consider pausing before renewal."
+            elif upcoming_cnt == 1:
+                label = "Low Value"
+                if is_yearly:
+                    action = f"Annual plan renews {days_str}: Only 1 upcoming drop scheduled."
+                else:
+                    action = f"Renews {days_str}: Only 1 upcoming drop scheduled. Pause before renewal to save {sub.cost:.2f} {sub.currency}."
             else:
-                action = f"Safe to pause and save {sub.cost:.2f} {sub.currency}/mo."
+                label = "Idle / Safe to Pause"
+                if is_yearly:
+                    action = f"Annual plan renews {days_str}: 0 upcoming drops scheduled."
+                else:
+                    action = f"Renews {days_str}: 0 upcoming drops scheduled. Pause before renewal to save {sub.cost:.2f} {sub.currency}."
+        else: # active
+            if drops_cnt >= 6:
+                label = "High Value"
+                action = "Keep Active: Great content drop volume this month."
+            elif drops_cnt >= 4:
+                if radar_settings.viewing_preference == "binge" and not is_yearly:
+                    label = "Binge Window"
+                    action = f"Binge Strategy: {drops_cnt} weekly drops airing. Safe to pause and binge when complete."
+                else:
+                    label = "Moderate Value"
+                    action = f"Keep Active: Steady weekly releases ({drops_cnt} drops scheduled)."
+            elif drops_cnt >= 2:
+                label = "Low Value"
+                if is_yearly:
+                    action = f"Annual plan active: Light drop schedule this month ({drops_cnt} drops, ~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+                elif radar_settings.viewing_preference == "binge":
+                    label = "Binge Window"
+                    action = f"Binge Candidate: Only {drops_cnt} drops in 4 weeks. Safe to pause and binge later."
+                else:
+                    action = f"Low Value: Only {drops_cnt} drops in 4 weeks. Consider pausing to save {sub.cost:.2f} {sub.currency}/mo."
+            elif drops_cnt == 1:
+                label = "Low Value"
+                if is_yearly:
+                    action = f"Annual plan active: Light drop schedule this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+                else:
+                    action = f"Minimal Value: Only 1 drop in 4 weeks. Consider pausing to save {sub.cost:.2f} {sub.currency}/mo."
+            else:
+                label = "Idle / Safe to Pause"
+                if is_yearly:
+                    action = f"Annual plan active: 0 drops scheduled this month (~{monthly_equiv:.0f} {sub.currency}/mo equiv)."
+                else:
+                    action = f"Safe to pause and save {sub.cost:.2f} {sub.currency}/mo."
 
         value_scorecard.append(schemas.ValueScorecardItem(
             id=sub.id,
@@ -619,7 +742,10 @@ def get_calendar(
             billing_cycle=cycle,
             drop_count=drops_cnt,
             value_label=label,
-            suggested_action=action
+            suggested_action=action,
+            subscription_status=sub_status,
+            next_billing_date=sub.next_billing_date,
+            days_left=days_left
         ))
 
     return schemas.CalendarResponse(

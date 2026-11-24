@@ -363,6 +363,16 @@
     font-weight: 600;
 }
 
+.providerDueSoon {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.providerExpired {
+    color: #f87171;
+    font-weight: 600;
+}
+
 /* Modal / Drop Card Popover */
 .modalOverlay {
     position: fixed;
@@ -499,6 +509,18 @@
     background: rgba(16, 185, 129, 0.15);
     border-color: rgba(16, 185, 129, 0.35);
     color: #34d399;
+}
+
+.modalServiceDueSoon {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fbbf24;
+}
+
+.modalServiceExpired {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #f87171;
 }
 
 .modalDateTag {

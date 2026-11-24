@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '@/lib/api';
 import styles from './subscriptions.module.css';
 import { Subscription, Service, Plan } from '@/lib/types';
-import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info, ChevronDown } from 'lucide-react';
+import { Plus, Loader2, Search, Filter, Edit2, Trash2, Calendar, FileText, DollarSign, RefreshCw, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRecommendations } from '@/context/RecommendationsContext';
 import { formatCurrency, getCurrencySymbol, COUNTRY_CURRENCY_MAP } from '@/lib/currency';
 import DatePicker from "react-datepicker";
@@ -12,6 +12,11 @@ import "react-datepicker/dist/react-datepicker.css";
 import { ServiceIcon } from '@/components/ServiceIcon';
 import CustomSelect from '@/components/CustomSelect';
 import { SubscriptionsSkeleton } from '@/components/SkeletonLoader';
+
+const DATE_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 interface SubFilterOption<T> {
     value: T;
@@ -84,7 +89,149 @@ function CustomSubFilterDropdown<T extends string>({
     );
 }
 
+function CustomDatePickerHeader({
+    date,
+    changeYear,
+    changeMonth,
+    decreaseMonth,
+    increaseMonth,
+    prevMonthButtonDisabled,
+    nextMonthButtonDisabled
+}: {
+    date: Date;
+    changeYear: (year: number) => void;
+    changeMonth: (month: number) => void;
+    decreaseMonth: () => void;
+    increaseMonth: () => void;
+    prevMonthButtonDisabled: boolean;
+    nextMonthButtonDisabled: boolean;
+}) {
+    const [monthOpen, setMonthOpen] = useState(false);
+    const [yearOpen, setYearOpen] = useState(false);
+    const headerRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
+                setMonthOpen(false);
+                setYearOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const currentSelectedYear = date.getFullYear();
+    const minYear = Math.min(new Date().getFullYear() - 1, currentSelectedYear);
+    const maxYear = Math.max(new Date().getFullYear() + 10, currentSelectedYear);
+    const yearOptions = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
+
+    return (
+        <div className={styles.datePickerCustomHeader} ref={headerRef}>
+            <button
+                type="button"
+                onClick={() => {
+                    setMonthOpen(false);
+                    setYearOpen(false);
+                    decreaseMonth();
+                }}
+                disabled={prevMonthButtonDisabled}
+                className={styles.datePickerNavBtn}
+                aria-label="Previous month"
+            >
+                <ChevronLeft size={16} />
+            </button>
+
+            <div className={styles.datePickerSelectsRow}>
+                {/* Custom Month Picker */}
+                <div className={styles.datePickerDropdownWrapper}>
+                    <button
+                        type="button"
+                        className={`${styles.datePickerHeaderBtn} ${monthOpen ? styles.datePickerHeaderBtnActive : ''}`}
+                        onClick={() => {
+                            setMonthOpen(!monthOpen);
+                            setYearOpen(false);
+                        }}
+                    >
+                        <span>{DATE_MONTHS[date.getMonth()]}</span>
+                        <ChevronDown size={13} className={monthOpen ? styles.rotateChevron : ''} />
+                    </button>
+
+                    {monthOpen && (
+                        <div className={styles.datePickerCustomMenu}>
+                            {DATE_MONTHS.map((monthName, idx) => {
+                                const isSelected = date.getMonth() === idx;
+                                return (
+                                    <button
+                                        key={monthName}
+                                        type="button"
+                                        className={`${styles.datePickerMenuItem} ${isSelected ? styles.datePickerMenuItemSelected : ''}`}
+                                        onClick={() => {
+                                            changeMonth(idx);
+                                            setMonthOpen(false);
+                                        }}
+                                    >
+                                        {monthName}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Custom Year Picker */}
+                <div className={styles.datePickerDropdownWrapper}>
+                    <button
+                        type="button"
+                        className={`${styles.datePickerHeaderBtn} ${yearOpen ? styles.datePickerHeaderBtnActive : ''}`}
+                        onClick={() => {
+                            setYearOpen(!yearOpen);
+                            setMonthOpen(false);
+                        }}
+                    >
+                        <span>{date.getFullYear()}</span>
+                        <ChevronDown size={13} className={yearOpen ? styles.rotateChevron : ''} />
+                    </button>
+
+                    {yearOpen && (
+                        <div className={styles.datePickerCustomMenu}>
+                            {yearOptions.map((yr) => {
+                                const isSelected = date.getFullYear() === yr;
+                                return (
+                                    <button
+                                        key={yr}
+                                        type="button"
+                                        className={`${styles.datePickerMenuItem} ${isSelected ? styles.datePickerMenuItemSelected : ''}`}
+                                        onClick={() => {
+                                            changeYear(yr);
+                                            setYearOpen(false);
+                                        }}
+                                    >
+                                        {yr}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <button
+                type="button"
+                onClick={() => {
+                    setMonthOpen(false);
+                    setYearOpen(false);
+                    increaseMonth();
+                }}
+                disabled={nextMonthButtonDisabled}
+                className={styles.datePickerNavBtn}
+                aria-label="Next month"
+            >
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    );
+}
 
 export default function SubscriptionsPage() {
     const { refreshRecommendations } = useRecommendations();
@@ -756,15 +903,22 @@ export default function SubscriptionsPage() {
 
                                 <div className={styles.field}>
                                     <label>Billing Cycle</label>
-                                    <CustomSelect
-                                        value={newSub.billing_cycle}
-                                        onChange={(val) => setNewSub({ ...newSub, billing_cycle: val as string })}
-                                        options={[
-                                            { value: 'monthly', label: 'Monthly' },
-                                            { value: 'yearly', label: 'Yearly' }
-                                        ]}
-                                        required
-                                    />
+                                    <div className={styles.billingCycleToggleGroup}>
+                                        <button
+                                            type="button"
+                                            className={`${styles.cycleToggleBtn} ${newSub.billing_cycle === 'monthly' ? styles.cycleToggleBtnActive : ''}`}
+                                            onClick={() => setNewSub({ ...newSub, billing_cycle: 'monthly' })}
+                                        >
+                                            Monthly
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={`${styles.cycleToggleBtn} ${newSub.billing_cycle === 'yearly' ? styles.cycleToggleBtnActive : ''}`}
+                                            onClick={() => setNewSub({ ...newSub, billing_cycle: 'yearly' })}
+                                        >
+                                            Yearly
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className={styles.field}>
@@ -782,10 +936,8 @@ export default function SubscriptionsPage() {
                                             dateFormat="MMM d, yyyy"
                                             minDate={new Date()}
                                             wrapperClassName={styles.fullWidth}
-                                            showMonthDropdown
-                                            showYearDropdown
-                                            dropdownMode="select"
                                             popperClassName={styles.datePickerPopper}
+                                            renderCustomHeader={(headerProps) => <CustomDatePickerHeader {...headerProps} />}
                                         />
                                         <div className={styles.inputIcon}>
                                             <Calendar size={18} />

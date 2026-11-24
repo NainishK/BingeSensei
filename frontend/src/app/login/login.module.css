@@ -291,3 +291,52 @@
 .googleButton:active {
     transform: translateY(0);
 }
+
+.callbackWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2.5rem 2rem;
+    background: rgba(24, 24, 27, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    max-width: 360px;
+    width: 90%;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.callbackPulseGlow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
+    animation: pulseGlow 1.8s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+.callbackStatusText {
+    color: #e4e4e7;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin: 0;
+    text-align: center;
+    letter-spacing: -0.01em;
+}

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import styles from './ReleaseReel.module.css';
-import { Play, X, Calendar, Check, ExternalLink, Sparkles, Tv, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, X, Calendar, Check, ExternalLink, Sparkles, Tv, ChevronDown, ChevronUp, Clock, AlertCircle } from 'lucide-react';
 
 export interface ActivityDrop {
     item_id: number;
@@ -15,6 +15,7 @@ export interface ActivityDrop {
     poster_path?: string;
     available_on?: string;
     is_on_active_subscription: boolean;
+    subscription_status?: 'active' | 'due_soon' | 'expired' | 'none';
     drop_type: 'new_season' | 'new_episode' | 'upcoming' | 'resurrected' | 'movie_streaming';
     season_number?: number;
     episode_number?: number;
@@ -246,16 +247,35 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
 
                                 {drop.available_on && (
                                     <span
-                                        className={`${styles.providerPill} ${drop.is_on_active_subscription ? styles.providerActive : ''}`}
-                                        title={drop.is_on_active_subscription ? `Included in your active ${drop.available_on} plan` : `Available on ${drop.available_on}`}
+                                        className={`
+                                            ${styles.providerPill}
+                                            ${drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status) ? styles.providerActive : ''}
+                                            ${drop.subscription_status === 'due_soon' ? styles.providerDueSoon : ''}
+                                            ${drop.subscription_status === 'expired' ? styles.providerExpired : ''}
+                                        `}
+                                        title={
+                                            drop.subscription_status === 'active'
+                                                ? `Included in your active ${drop.available_on} plan`
+                                                : drop.subscription_status === 'due_soon'
+                                                ? `Renews soon on ${drop.available_on}`
+                                                : drop.subscription_status === 'expired'
+                                                ? `Subscription expired on ${drop.available_on}`
+                                                : `Available on ${drop.available_on}`
+                                        }
                                     >
                                         <ServiceIcon
                                             name={drop.available_on}
                                             style={{ width: 12, height: 12, borderRadius: 2.5, objectFit: 'cover', flexShrink: 0 }}
                                         />
                                         <span className={styles.providerNameText}>{drop.available_on}</span>
-                                        {drop.is_on_active_subscription && (
+                                        {(drop.subscription_status === 'active' || (drop.is_on_active_subscription && !drop.subscription_status)) && (
                                             <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} />
+                                        )}
+                                        {drop.subscription_status === 'due_soon' && (
+                                            <Clock size={9} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                                        )}
+                                        {drop.subscription_status === 'expired' && (
+                                            <AlertCircle size={9} strokeWidth={2.5} style={{ flexShrink: 0 }} />
                                         )}
                                     </span>
                                 )}
@@ -326,16 +346,23 @@ export default function ReleaseReel({ onWatchlistUpdated }: ReleaseReelProps) {
                             <div className={styles.modalMetaRow}>
                                 {selectedDrop.available_on && (
                                     <span
-                                        className={`${styles.modalServiceTag} ${
-                                            selectedDrop.is_on_active_subscription ? styles.modalServiceActive : ''
-                                        }`}
+                                        className={`
+                                            ${styles.modalServiceTag}
+                                            ${selectedDrop.subscription_status === 'active' || (selectedDrop.is_on_active_subscription && !selectedDrop.subscription_status) ? styles.modalServiceActive : ''}
+                                            ${selectedDrop.subscription_status === 'due_soon' ? styles.modalServiceDueSoon : ''}
+                                            ${selectedDrop.subscription_status === 'expired' ? styles.modalServiceExpired : ''}
+                                        `}
                                     >
                                         <ServiceIcon
                                             name={selectedDrop.available_on}
                                             style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'cover', flexShrink: 0 }}
                                         />
-                                        {selectedDrop.is_on_active_subscription
-                                            ? `Streaming on your ${selectedDrop.available_on}`
+                                        {selectedDrop.subscription_status === 'active' || (selectedDrop.is_on_active_subscription && !selectedDrop.subscription_status)
+                                            ? `Streaming on your active ${selectedDrop.available_on}`
+                                            : selectedDrop.subscription_status === 'due_soon'
+                                            ? `Due soon on ${selectedDrop.available_on}`
+                                            : selectedDrop.subscription_status === 'expired'
+                                            ? `Subscription expired on ${selectedDrop.available_on}`
                                             : `Available on ${selectedDrop.available_on}`}
                                     </span>
                                 )}

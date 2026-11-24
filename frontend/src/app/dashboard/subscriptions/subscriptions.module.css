@@ -736,7 +736,11 @@ select.input {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
     border-radius: 16px !important;
     background-color: white !important;
-    overflow: hidden;
+    overflow: visible !important;
+}
+
+.datePickerPopper {
+    z-index: 1050 !important;
 }
 
 :global(.react-datepicker__header) {
@@ -845,6 +849,193 @@ select.input {
 /* Hide default scrollbar for dropdowns */
 
 
+/* Modern Segmented Billing Cycle Toggle */
+.billingCycleToggleGroup {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 4px;
+}
+
+.cycleToggleBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cycleToggleBtn:hover:not(.cycleToggleBtnActive) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--foreground);
+}
+
+.cycleToggleBtnActive {
+    background: var(--card);
+    color: var(--primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+/* Modern DatePicker Custom Header */
+.datePickerCustomHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: transparent;
+    gap: 8px;
+    position: relative;
+}
+
+.datePickerNavBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.datePickerNavBtn:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--primary);
+    color: var(--primary);
+    transform: translateY(-1px);
+}
+
+.datePickerNavBtn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.datePickerSelectsRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+}
+
+.datePickerDropdownWrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.datePickerHeaderBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--foreground);
+    padding: 5px 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.datePickerHeaderBtn:hover {
+    background: var(--accent);
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+.datePickerHeaderBtnActive {
+    background: var(--accent);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.rotateChevron {
+    transform: rotate(180deg);
+    transition: transform 0.2s ease;
+}
+
+.datePickerCustomMenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 99999;
+    min-width: 110px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: menuFadeIn 0.15s ease-out;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -4px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.datePickerCustomMenu::-webkit-scrollbar {
+    width: 4px;
+}
+
+.datePickerCustomMenu::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.datePickerMenuItem {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.datePickerMenuItem:hover {
+    background: var(--accent);
+    color: var(--foreground);
+}
+
+.datePickerMenuItemSelected {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--primary);
+    font-weight: 700;
+}
+
 /* Custom Selects in Header */
 :global(.react-datepicker__header__dropdown) {
     margin-top: 8px;
@@ -853,19 +1044,23 @@ select.input {
 
 :global(.react-datepicker__month-select),
 :global(.react-datepicker__year-select) {
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     background-color: var(--card);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding: 5px 24px 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
     color: var(--foreground);
-    font-weight: 500;
-    margin: 0 4px;
-    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
     margin: 0 4px;
     cursor: pointer;
     outline: none;
     color-scheme: light dark;
-    /* Ensures native dropdowns respect theme */
 }
 
 :global(.react-datepicker__month-select) option,
@@ -874,7 +1069,8 @@ select.input {
     color: var(--foreground);
 }
 
-:global(.react-datepicker__year-select:focus) {
+:global(.react-datepicker__year-select:focus),
+:global(.react-datepicker__month-select:focus) {
     border-color: var(--primary);
 }
 

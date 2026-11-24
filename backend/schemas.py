@@ -115,6 +115,7 @@ class ActivityDrop(BaseModel):
     backdrop_path: Optional[str] = None
     available_on: Optional[str] = None
     is_on_active_subscription: bool = False
+    subscription_status: str = "none" # "active", "due_soon", "expired", "none"
     drop_type: str # "new_season", "new_episode", "upcoming", "resurrected"
     season_number: Optional[int] = None
     episode_number: Optional[int] = None
@@ -144,8 +145,11 @@ class ValueScorecardItem(BaseModel):
     currency: str
     billing_cycle: str = "monthly"
     drop_count: int
-    value_label: str # "High Value", "Moderate Value", "Low Value", "Idle / Safe to Pause"
+    value_label: str # "High Value", "Moderate Value", "Low Value", "Idle / Safe to Pause", "Expired · Drops Airing", etc.
     suggested_action: str
+    subscription_status: str = "active" # "active", "due_soon", "expired"
+    next_billing_date: Optional[date] = None
+    days_left: Optional[int] = None
 
 class CalendarResponse(BaseModel):
     month: str # YYYY-MM

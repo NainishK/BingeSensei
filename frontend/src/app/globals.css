@@ -246,12 +246,30 @@ input:-webkit-autofill:active {
   border-bottom-color: var(--card) !important;
 }
 
-/* 7. Native Selects (Just in case) */
+/* 7. Native Selects (Theme and modern arrow overrides) */
 .react-datepicker__month-select,
 .react-datepicker__year-select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
   background-color: var(--card) !important;
   color: var(--foreground) !important;
   border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 5px 24px 5px 10px !important;
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  outline: none !important;
+}
+
+.react-datepicker__month-select option,
+.react-datepicker__year-select option {
+  background-color: #18181b !important;
+  color: #f4f4f5 !important;
 }
 
 /* Global Spin Animation Utility */

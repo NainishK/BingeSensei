@@ -2,52 +2,46 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-import styles from '../login.module.css'; // Reuse login styles
+import Image from 'next/image';
+import styles from '../login.module.css';
 
 export default function AuthCallbackPage() {
     const router = useRouter();
-    const [status, setStatus] = useState('Completing secure sign-in...');
+    const [status, setStatus] = useState('Connecting to BingeSensei...');
 
     useEffect(() => {
-        // 1. Get Token from URL
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
         const error = params.get('error');
 
         if (token) {
-            // 2. Store Token
             localStorage.setItem('token', token);
-
             const isNewUser = params.get('new_user') === 'true';
-
-            if (isNewUser) {
-                setStatus('Welcome! Setting up your profile...');
-                setTimeout(() => {
-                    window.location.href = '/welcome';
-                }, 800);
-            } else {
-                setStatus('Redirecting to dashboard...');
-                setTimeout(() => {
-                    window.location.href = '/dashboard/watchlist';
-                }, 800);
-            }
+            // Immediate seamless redirect without artificial lag
+            window.location.replace(isNewUser ? '/welcome' : '/dashboard/watchlist');
         } else if (error) {
             setStatus('Authentication failed. Redirecting to login...');
-            setTimeout(() => router.push('/login'), 2000);
+            setTimeout(() => router.replace('/login'), 1500);
         } else {
-            // Fallback
-            setStatus('Invalid request.');
-            setTimeout(() => router.push('/login'), 2000);
+            setStatus('Invalid request. Redirecting...');
+            setTimeout(() => router.replace('/login'), 1500);
         }
     }, [router]);
 
     return (
         <div className={styles.container}>
-            <div className={styles.glassCard} style={{ textAlign: 'center', minHeight: '300px', justifyContent: 'center' }}>
-                <Loader2 className="animate-spin" size={48} color="#6366f1" style={{ margin: '0 auto' }} />
-                <h2 className={styles.title} style={{ marginTop: '1.5rem', fontSize: '1.5rem' }}>One moment...</h2>
-                <p className={styles.subtitle}>{status}</p>
+            <div className={styles.callbackWrapper}>
+                <div className={styles.callbackPulseGlow}>
+                    <Image
+                        src="/logo-icon-final-v3.png"
+                        alt="BingeSensei Logo Icon"
+                        width={56}
+                        height={56}
+                        style={{ objectFit: 'contain' }}
+                        priority
+                    />
+                </div>
+                <p className={styles.callbackStatusText}>{status}</p>
             </div>
         </div>
     );
