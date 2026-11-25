@@ -1,19 +1,22 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import styles from './recommendations.module.css';
 import { Recommendation } from '@/lib/types';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import { useRecommendations } from '@/context/RecommendationsContext';
-import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Tv, Globe, Layers, Flame, Star, Check, Plus, Info, Loader2 } from 'lucide-react';
+import { PlayCircle, Lightbulb, TrendingUp, Sparkles, RefreshCw, XCircle, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, Tv, Globe, Layers, Flame, Star, Check, Plus, Info, Loader2, Search, X, Clock, Film, Trash2 } from 'lucide-react';
 import { ServiceIcon } from '@/components/ServiceIcon';
 import AIInsightsModal from '@/components/AIInsightsModal';
 import MediaDetailsModal from '@/components/MediaDetailsModal';
+import { STATUS_COLORS } from '@/lib/statusColors';
 import { formatCurrency } from '@/lib/currency';
 
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { RecommendationsSkeleton } from '@/components/SkeletonLoader';
+import StarRating from '@/components/StarRating';
 interface FilterOption {
     value: 'all' | 'subscriptions' | 'explore';
     label: string;
@@ -101,21 +104,24 @@ export default function RecommendationsPage() {
         id: number; tmdb_id: number; status: string; user_rating?: number; title?: string;
         current_season?: number; current_episode?: number; notes?: string;
     }>>([]);
-    const [trendingVisible, setTrendingVisible] = useState(5);
-
-    useEffect(() => {
-        const handleResize = () => setTrendingVisible(window.innerWidth < 768 ? 4 : 5);
-        handleResize(); // Set initial
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
     const [refreshing, setRefreshing] = useState(false);
     const [showAIModal, setShowAIModal] = useState(false);
-    const [trendingIndex, setTrendingIndex] = useState(0);
     const [heroIndex, setHeroIndex] = useState(0);
     const [isHeroHovered, setIsHeroHovered] = useState(false);
     const [heroAdding, setHeroAdding] = useState(false);
+    const [heroStatusDropdownOpen, setHeroStatusDropdownOpen] = useState(false);
+    const heroStatusRef = useRef<HTMLDivElement>(null);
     const [detailsModalItem, setDetailsModalItem] = useState<MediaItem | null>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (heroStatusRef.current && !heroStatusRef.current.contains(e.target as Node)) {
+                setHeroStatusDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
     const [userCountry, setUserCountry] = useState('US');
     const [userSubscriptions, setUserSubscriptions] = useState<string[]>([]);
     const [filterTab, setFilterTab] = useState<'all' | 'subscriptions' | 'explore'>('all');
@@ -123,6 +129,236 @@ export default function RecommendationsPage() {
 
     // Deletion State
     const [itemToRemove, setItemToRemove] = useState<{ id: number; title: string } | null>(null);
+
+    // Search Feature State
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchCategory, setSearchCategory] = useState<'all' | 'movie' | 'tv' | 'anime'>('all');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearchLoading, setIsSearchLoading] = useState(false);
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    const [searchStatusDropdownId, setSearchStatusDropdownId] = useState<number | null>(null);
+    const [searchStatusDropdownCoords, setSearchStatusDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+    const [searchActiveDropdownItem, setSearchActiveDropdownItem] = useState<any | null>(null);
+    const [searchRatingModeId, setSearchRatingModeId] = useState<number | null>(null);
+    const [searchPendingStatus, setSearchPendingStatus] = useState<string | null>(null);
+    const [expandedResultId, setExpandedResultId] = useState<number | null>(null);
+    const searchContainerRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const searchStatusDropdownRef = useRef<HTMLDivElement>(null);
+
+    const closeSearchStatusDropdown = () => {
+        setSearchStatusDropdownId(null);
+        setSearchRatingModeId(null);
+        setSearchPendingStatus(null);
+        setSearchStatusDropdownCoords(null);
+        setSearchActiveDropdownItem(null);
+    };
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('recs_recent_searches');
+            if (saved) {
+                setRecentSearches(JSON.parse(saved));
+            } else {
+                setRecentSearches(['Mobland', 'The Lord of the Rings', 'Avengers']);
+            }
+        } catch {
+            setRecentSearches(['Mobland', 'The Lord of the Rings', 'Avengers']);
+        }
+    }, []);
+
+    const saveRecentSearch = (term: string) => {
+        if (!term || !term.trim()) return;
+        const clean = term.trim();
+        setRecentSearches(prev => {
+            const next = [clean, ...prev.filter(s => s.toLowerCase() !== clean.toLowerCase())].slice(0, 8);
+            try {
+                localStorage.setItem('recs_recent_searches', JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+    };
+
+    const clearRecentSearches = () => {
+        setRecentSearches([]);
+        try {
+            localStorage.removeItem('recs_recent_searches');
+        } catch {}
+    };
+
+    const removeRecentSearch = (e: React.MouseEvent, term: string) => {
+        e.stopPropagation();
+        setRecentSearches(prev => {
+            const next = prev.filter(s => s !== term);
+            try {
+                localStorage.setItem('recs_recent_searches', JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            // Keep search open while MediaDetailsModal or ConfirmationModal is active
+            if (detailsModalItem || itemToRemove) return;
+            const target = e.target as HTMLElement;
+            if (searchStatusDropdownRef.current && searchStatusDropdownRef.current.contains(target)) {
+                return;
+            }
+            if (searchStatusDropdownRef.current && !searchStatusDropdownRef.current.contains(target) && !target.closest('[data-recs-search-status-btn="true"]')) {
+                closeSearchStatusDropdown();
+            }
+            if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
+                setIsSearchOpen(false);
+                closeSearchStatusDropdown();
+            }
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                if (detailsModalItem) return;
+                if (searchRatingModeId || searchStatusDropdownId) {
+                    closeSearchStatusDropdown();
+                    return;
+                }
+                setIsSearchOpen(false);
+            }
+        };
+        if (isSearchOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('resize', closeSearchStatusDropdown);
+            setTimeout(() => searchInputRef.current?.focus(), 50);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('resize', closeSearchStatusDropdown);
+        };
+    }, [isSearchOpen, detailsModalItem, itemToRemove, searchStatusDropdownId, searchRatingModeId]);
+
+    useEffect(() => {
+        if (!searchQuery || searchQuery.trim().length < 2) {
+            setSearchResults([]);
+            setIsSearchLoading(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setIsSearchLoading(true);
+            try {
+                const res = await api.get(`/search?query=${encodeURIComponent(searchQuery.trim())}`);
+                const list = res.data?.results || [];
+                const mediaOnly = list.filter((item: any) => item.media_type === 'movie' || item.media_type === 'tv');
+                setSearchResults(mediaOnly);
+            } catch (err) {
+                console.error('Search error in recommendations:', err);
+                setSearchResults([]);
+            } finally {
+                setIsSearchLoading(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const isAnimeItem = (item: any) => {
+        const hasAnimGenre = item.genre_ids?.includes(16);
+        const isJapanese = item.original_language === 'ja';
+        return hasAnimGenre && (isJapanese || item.media_type === 'tv' || item.origin_country?.includes('JP'));
+    };
+
+    const displayedSearchResults = searchResults.filter(item => {
+        if (searchCategory === 'all') return true;
+        if (searchCategory === 'anime') return isAnimeItem(item);
+        if (searchCategory === 'movie') return item.media_type === 'movie' && !isAnimeItem(item);
+        if (searchCategory === 'tv') return item.media_type === 'tv' && !isAnimeItem(item);
+        return true;
+    });
+
+    const handleSelectSearchResult = (item: any) => {
+        saveRecentSearch(item.title || item.name || searchQuery);
+        const existing = watchlist.find(w => w.tmdb_id === item.id);
+        setDetailsModalItem({
+            id: item.id,
+            dbId: existing?.id,
+            title: item.title || item.name || '',
+            name: item.name,
+            overview: item.overview || '',
+            poster_path: item.poster_path || '',
+            backdrop_path: item.backdrop_path,
+            vote_average: item.vote_average,
+            media_type: item.media_type || (item.first_air_date ? 'tv' : 'movie'),
+            status: existing?.status,
+            user_rating: existing?.user_rating,
+            current_season: existing?.current_season,
+            current_episode: existing?.current_episode,
+            notes: existing?.notes,
+        });
+        // Search persists: do not close or reset search here
+    };
+
+    const handleSearchStatusSelect = async (item: any, targetStatus: string) => {
+        const showRating = targetStatus === 'watched' || targetStatus === 'watching';
+        const existing = watchlist.find(w => w.tmdb_id === item.id);
+        try {
+            if (existing) {
+                await api.put(`/watchlist/${existing.id}/status?status=${targetStatus}`);
+            } else {
+                await api.post('/watchlist/', {
+                    tmdb_id: item.id,
+                    title: item.title || item.name || 'Unknown',
+                    media_type: item.media_type || (item.first_air_date ? 'tv' : 'movie'),
+                    poster_path: item.poster_path,
+                    backdrop_path: item.backdrop_path,
+                    vote_average: item.vote_average,
+                    overview: item.overview,
+                    status: targetStatus,
+                    genre_ids: item.genre_ids,
+                    original_language: item.original_language
+                });
+            }
+            await fetchWatchlist();
+            if (showRating) {
+                setSearchRatingModeId(item.id);
+                setSearchPendingStatus(targetStatus);
+                setSearchStatusDropdownId(item.id);
+                setSearchActiveDropdownItem(item);
+            } else {
+                closeSearchStatusDropdown();
+            }
+        } catch (err) {
+            console.error('Failed to update status from search', err);
+        }
+    };
+
+    const handleSearchRatingSelect = async (item: any, rating: number) => {
+        try {
+            const existing = watchlist.find(w => w.tmdb_id === item.id);
+            if (existing) {
+                await api.put(`/watchlist/${existing.id}/rating`, { rating });
+                await fetchWatchlist();
+            }
+        } catch (err) {
+            console.error('Failed to save rating from search', err);
+        } finally {
+            closeSearchStatusDropdown();
+        }
+    };
+
+    const handleSearchSkipRating = () => {
+        closeSearchStatusDropdown();
+    };
+
+    const handleSearchRemove = async (watchlistId: number) => {
+        try {
+            await api.delete(`/watchlist/${watchlistId}`);
+            await fetchWatchlist();
+            closeSearchStatusDropdown();
+        } catch (err) {
+            console.error('Failed to remove from watchlist', err);
+        }
+    };
 
     useEffect(() => {
         fetchWatchlist();
@@ -188,18 +424,6 @@ export default function RecommendationsPage() {
         }
     };
 
-    // ... (rest of simple handlers)
-
-    const handleNextTrending = () => {
-        setTrendingIndex(prev =>
-            prev + trendingVisible < trendingRecs.length ? prev + 1 : prev
-        );
-    };
-
-    const handlePrevTrending = () => {
-        setTrendingIndex(prev => prev > 0 ? prev - 1 : 0);
-    };
-
     const handleRefresh = async () => {
         setRefreshing(true);
         try {
@@ -246,21 +470,70 @@ export default function RecommendationsPage() {
         return true;
     });
 
+    const [dragStartX, setDragStartX] = useState<number | null>(null);
+    const [dragCurrentX, setDragCurrentX] = useState<number | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+
     useEffect(() => {
-        if (isHeroHovered || filteredTrendingRecs.length <= 1) return;
+        if (isHeroHovered || isDragging || filteredTrendingRecs.length <= 1) return;
         const interval = setInterval(() => {
             setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
         }, 6000);
         return () => clearInterval(interval);
-    }, [isHeroHovered, filteredTrendingRecs.length]);
+    }, [isHeroHovered, isDragging, filteredTrendingRecs.length]);
 
-    const handleHeroWatchlistClick = async (rec: Recommendation, existingId?: number, existingStatus?: string) => {
+    const handleHeroPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        const target = e.target as HTMLElement;
+        if (target && target.closest('button, input, a, select, [role="button"], [data-interactive="true"]')) {
+            return;
+        }
+        if (e.pointerType === 'mouse') {
+            e.preventDefault();
+        }
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {}
+        setDragStartX(e.clientX);
+        setDragCurrentX(e.clientX);
+        setIsDragging(true);
+    };
+
+    const handleHeroPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isDragging || dragStartX === null) return;
+        setDragCurrentX(e.clientX);
+    };
+
+    const handleHeroPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isDragging || dragStartX === null || dragCurrentX === null) {
+            setIsDragging(false);
+            setDragStartX(null);
+            setDragCurrentX(null);
+            return;
+        }
+        const diff = dragCurrentX - dragStartX;
+        const threshold = 35;
+        if (diff < -threshold && filteredTrendingRecs.length > 1) {
+            // Dragged left: go to next item
+            setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
+        } else if (diff > threshold && filteredTrendingRecs.length > 1) {
+            // Dragged right: go to prev item
+            setHeroIndex((prev) => (prev - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length);
+        }
+        setIsDragging(false);
+        setDragStartX(null);
+        setDragCurrentX(null);
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {}
+    };
+
+    const handleHeroStatusSelect = async (rec: Recommendation, targetStatus: string, existingId?: number) => {
         if (heroAdding) return;
         setHeroAdding(true);
         try {
             if (existingId) {
-                const nextStatus = existingStatus === 'plan_to_watch' ? 'watching' : 'plan_to_watch';
-                await api.put(`/watchlist/${existingId}`, { status: nextStatus });
+                await api.put(`/watchlist/${existingId}/status?status=${targetStatus}`);
             } else {
                 await api.post('/watchlist/', {
                     tmdb_id: rec.tmdb_id || 0,
@@ -270,7 +543,7 @@ export default function RecommendationsPage() {
                     backdrop_path: rec.backdrop_path,
                     vote_average: rec.vote_average,
                     overview: rec.overview,
-                    status: 'plan_to_watch',
+                    status: targetStatus,
                     genre_ids: rec.genre_ids,
                     original_language: rec.original_language
                 });
@@ -306,11 +579,7 @@ export default function RecommendationsPage() {
     if (loadingDashboard && dashboardRecs.length === 0) return <RecommendationsSkeleton />;
 
     return (
-        <div className={styles.container}>
-            <div className={styles.header}>
-                <h1 className={styles.pageTitle}>Smart Recommendations</h1>
-            </div>
-
+        <div className={styles.pageWrapper}>
             <AIInsightsModal
                 isOpen={showAIModal}
                 onClose={() => setShowAIModal(false)}
@@ -318,7 +587,7 @@ export default function RecommendationsPage() {
                 onWatchlistUpdate={fetchWatchlist}
             />
 
-            {/* Trending Section - Cinematic Hero Showcase & Filter Pills */}
+            {/* Cinematic Hero Showcase spanning edge-to-edge at the top of the screen */}
             {trendingRecs.length > 0 && (() => {
                 const safeHeroIndex = filteredTrendingRecs.length > 0 ? heroIndex % filteredTrendingRecs.length : 0;
                 const currentHero = filteredTrendingRecs[safeHeroIndex];
@@ -328,94 +597,431 @@ export default function RecommendationsPage() {
                     ? `https://image.tmdb.org/t/p/w1280${currentHero.backdrop_path}`
                     : (currentHero?.poster_path ? `https://image.tmdb.org/t/p/w1280${currentHero.poster_path}` : '');
 
+                const dragOffset = isDragging && dragStartX !== null && dragCurrentX !== null
+                    ? Math.max(-120, Math.min(120, dragCurrentX - dragStartX))
+                    : 0;
+
                 return (
-                    <section className={styles.section}>
-                        <div className={styles.sectionHeader}>
-                            <h2 className={styles.sectionTitle} style={{ color: '#ec4899' }}>
-                                <PlayCircle className={styles.sectionIcon} /> Trending Content
-                            </h2>
-                        </div>
-
-                        {/* Mobile Filter Dropdown */}
-                        <CustomFilterDropdown
-                            value={trendingTab}
-                            onChange={(val) => {
-                                setTrendingTab(val);
-                                setHeroIndex(0);
-                                setTrendingIndex(0);
+                    <div
+                        className={`${styles.heroShowcase} ${isDragging ? styles.heroShowcaseDragging : ''}`}
+                        onMouseEnter={() => setIsHeroHovered(true)}
+                        onMouseLeave={() => setIsHeroHovered(false)}
+                        onPointerDown={handleHeroPointerDown}
+                        onPointerMove={handleHeroPointerMove}
+                        onPointerUp={handleHeroPointerUp}
+                        onPointerCancel={handleHeroPointerUp}
+                        onDragStart={(e) => e.preventDefault()}
+                    >
+                        <div
+                            className={styles.heroBackdropWrapper}
+                            style={{
+                                transform: dragOffset ? `translateX(${dragOffset * 0.4}px)` : undefined,
+                                transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
                             }}
-                            options={[
-                                { 
-                                    value: 'all', 
-                                    label: 'All Trending', 
-                                    count: trendingRecs.length, 
-                                    icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
-                                },
-                                { 
-                                    value: 'subscriptions', 
-                                    label: 'On My Subscriptions', 
-                                    count: trendingSubCount, 
-                                    icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
-                                },
-                                { 
-                                    value: 'explore', 
-                                    label: 'Worldwide & Explore', 
-                                    count: trendingExploreCount, 
-                                    icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
-                                },
-                            ]}
-                        />
-
-                        {/* Desktop Filter Pills */}
-                        <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`} style={{ marginBottom: '1.25rem' }}>
-                            <button
-                                className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
-                                onClick={() => { setTrendingTab('all'); setHeroIndex(0); setTrendingIndex(0); }}
-                            >
-                                <span className={styles.iconRecsAll}><Layers size={14} /></span>
-                                <span className={styles.pillLabel}>All Trending</span>
-                                <span className={styles.pillCount}>{trendingRecs.length}</span>
-                            </button>
-                            <button
-                                className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
-                                onClick={() => { setTrendingTab('subscriptions'); setHeroIndex(0); setTrendingIndex(0); }}
-                            >
-                                <span className={styles.iconRecsSubs}><Tv size={14} /></span>
-                                <span className={styles.pillLabel}>On My Subscriptions</span>
-                                <span className={styles.pillCount}>{trendingSubCount}</span>
-                            </button>
-                            <button
-                                className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
-                                onClick={() => { setTrendingTab('explore'); setHeroIndex(0); setTrendingIndex(0); }}
-                            >
-                                <span className={styles.iconRecsExplore}><Globe size={14} /></span>
-                                <span className={styles.pillLabel}>Worldwide & Explore</span>
-                                <span className={styles.pillCount}>{trendingExploreCount}</span>
-                            </button>
+                        >
+                            {heroBackdrop ? (
+                                <img
+                                    src={heroBackdrop}
+                                    alt={currentHero?.items[0] || 'Featured'}
+                                    className={styles.heroBackdropImg}
+                                    draggable={false}
+                                    onDragStart={(e) => e.preventDefault()}
+                                />
+                            ) : (
+                                <div className={styles.heroBackdropFallback} />
+                            )}
+                            <div className={styles.heroBackdropScrimLeft} />
+                            <div className={styles.heroBackdropScrimBottom} />
                         </div>
 
-                        {/* Cinematic Hero Showcase */}
-                        {currentHero && (
-                            <div
-                                className={styles.heroShowcase}
-                                onMouseEnter={() => setIsHeroHovered(true)}
-                                onMouseLeave={() => setIsHeroHovered(false)}
-                            >
-                                <div className={styles.heroBackdropWrapper}>
-                                    {heroBackdrop ? (
-                                        <img
-                                            src={heroBackdrop}
-                                            alt={currentHero.items[0]}
-                                            className={styles.heroBackdropImg}
-                                        />
-                                    ) : (
-                                        <div className={styles.heroBackdropFallback} />
-                                    )}
-                                    <div className={styles.heroBackdropScrimLeft} />
-                                    <div className={styles.heroBackdropScrimBottom} />
+                        {/* Top Bar inside Hero: Filter Pills on Left, Separated Search Control on Right */}
+                        <div className={styles.heroTopBar} data-interactive="true">
+                            <div className={styles.heroTopBarLeft}>
+                                {/* Desktop Filter Pills */}
+                                <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`}>
+                                    <button
+                                        className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
+                                        onClick={() => { setTrendingTab('all'); setHeroIndex(0); }}
+                                    >
+                                        <span className={styles.iconRecsAll}><Layers size={13} /></span>
+                                        <span className={styles.pillLabel}>All Trending</span>
+                                        <span className={styles.pillCount}>{trendingRecs.length}</span>
+                                    </button>
+                                    <button
+                                        className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
+                                        onClick={() => { setTrendingTab('subscriptions'); setHeroIndex(0); }}
+                                    >
+                                        <span className={styles.iconRecsSubs}><Tv size={13} /></span>
+                                        <span className={styles.pillLabel}>On My Subscriptions</span>
+                                        <span className={styles.pillCount}>{trendingSubCount}</span>
+                                    </button>
+                                    <button
+                                        className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
+                                        onClick={() => { setTrendingTab('explore'); setHeroIndex(0); }}
+                                    >
+                                        <span className={styles.iconRecsExplore}><Globe size={13} /></span>
+                                        <span className={styles.pillLabel}>Worldwide & Explore</span>
+                                        <span className={styles.pillCount}>{trendingExploreCount}</span>
+                                    </button>
                                 </div>
 
-                                <div className={styles.heroContent}>
+                                {/* Mobile Filter Dropdown */}
+                                <div className={styles.mobileFilterDropdownWrapper}>
+                                    <CustomFilterDropdown
+                                        value={trendingTab}
+                                        onChange={(val) => {
+                                            setTrendingTab(val);
+                                            setHeroIndex(0);
+                                        }}
+                                        options={[
+                                            { 
+                                                value: 'all', 
+                                                label: 'All Trending', 
+                                                count: trendingRecs.length, 
+                                                icon: <span className={styles.iconRecsAll}><Layers size={14} /></span> 
+                                            },
+                                            { 
+                                                value: 'subscriptions', 
+                                                label: 'On My Subscriptions', 
+                                                count: trendingSubCount, 
+                                                icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span> 
+                                            },
+                                            { 
+                                                value: 'explore', 
+                                                label: 'Worldwide & Explore', 
+                                                count: trendingExploreCount, 
+                                                icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span> 
+                                            },
+                                        ]}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className={styles.heroTopBarRight}>
+                                {/* Separated Search Control */}
+                                <div className={styles.heroSearchWrapper} ref={searchContainerRef}>
+                                    {!isSearchOpen ? (
+                                        <button
+                                            type="button"
+                                            className={styles.heroSearchTriggerBtn}
+                                            onClick={() => setIsSearchOpen(true)}
+                                            title="Search movies, shows, and anime"
+                                            aria-label="Search movies, shows, and anime"
+                                        >
+                                            <Search size={15} />
+                                            <span className={styles.heroSearchTriggerLabel}>Search</span>
+                                        </button>
+                                    ) : (
+                                        <div className={styles.heroSearchActiveBox}>
+                                            <div className={styles.heroSearchInputContainer}>
+                                                <Search size={15} className={styles.heroSearchInputIcon} />
+                                                <input
+                                                    ref={searchInputRef}
+                                                    type="text"
+                                                    className={styles.heroSearchInput}
+                                                    placeholder="Search movies, shows, and anime"
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                />
+                                                {searchQuery && (
+                                                    <button
+                                                        type="button"
+                                                        className={styles.heroSearchClearQueryBtn}
+                                                        onClick={() => setSearchQuery('')}
+                                                        title="Clear text"
+                                                    >
+                                                        <X size={13} />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    className={styles.heroSearchCloseBtn}
+                                                    onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
+                                                    title="Close search"
+                                                >
+                                                    <X size={15} />
+                                                </button>
+                                            </div>
+
+                                            {/* Dropdown panel matching reference design */}
+                                            <div className={styles.heroSearchDropdownPanel}>
+                                                {/* Category filter tabs with live counts */}
+                                                <div className={styles.searchCategoryTabs}>
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.searchCategoryTab} ${searchCategory === 'all' ? styles.searchCategoryTabActive : ''}`}
+                                                        onClick={() => setSearchCategory('all')}
+                                                    >
+                                                        <span>All</span>
+                                                        {searchResults.length > 0 && <span className={styles.searchCategoryCount}>{searchResults.length}</span>}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.searchCategoryTab} ${searchCategory === 'movie' ? styles.searchCategoryTabActive : ''}`}
+                                                        onClick={() => setSearchCategory('movie')}
+                                                    >
+                                                        <span>Movies</span>
+                                                        {searchResults.length > 0 && (
+                                                            <span className={styles.searchCategoryCount}>
+                                                                {searchResults.filter(r => r.media_type === 'movie' && !isAnimeItem(r)).length}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.searchCategoryTab} ${searchCategory === 'tv' ? styles.searchCategoryTabActive : ''}`}
+                                                        onClick={() => setSearchCategory('tv')}
+                                                    >
+                                                        <span>TV Shows</span>
+                                                        {searchResults.length > 0 && (
+                                                            <span className={styles.searchCategoryCount}>
+                                                                {searchResults.filter(r => r.media_type === 'tv' && !isAnimeItem(r)).length}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`${styles.searchCategoryTab} ${searchCategory === 'anime' ? styles.searchCategoryTabActive : ''}`}
+                                                        onClick={() => setSearchCategory('anime')}
+                                                    >
+                                                        <span>Anime</span>
+                                                        {searchResults.length > 0 && (
+                                                            <span className={styles.searchCategoryCount}>
+                                                                {searchResults.filter(r => isAnimeItem(r)).length}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                </div>
+
+                                                {/* Dropdown content: Recent Searches vs Results */}
+                                                {searchQuery.trim().length < 2 ? (
+                                                    <div className={styles.recentSearchesSection}>
+                                                        <div className={styles.recentSearchesHeader}>
+                                                            <span>Recent searches</span>
+                                                            {recentSearches.length > 0 && (
+                                                                <button
+                                                                    type="button"
+                                                                    className={styles.clearRecentBtn}
+                                                                    onClick={clearRecentSearches}
+                                                                >
+                                                                    Clear
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        {recentSearches.length > 0 ? (
+                                                            <div className={styles.recentSearchesList}>
+                                                                {recentSearches.map((term, idx) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        className={styles.recentSearchItem}
+                                                                        onClick={() => {
+                                                                            setSearchQuery(term);
+                                                                            searchInputRef.current?.focus();
+                                                                        }}
+                                                                    >
+                                                                        <div className={styles.recentSearchItemLeft}>
+                                                                            <Clock size={13} className={styles.recentSearchClock} />
+                                                                            <span>{term}</span>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            className={styles.removeRecentItemBtn}
+                                                                            onClick={(e) => removeRecentSearch(e, term)}
+                                                                            title="Remove"
+                                                                        >
+                                                                            <X size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className={styles.emptyRecentNotice}>No recent searches</p>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className={styles.searchResultsSection}>
+                                                        {isSearchLoading ? (
+                                                            <div className={styles.searchLoadingState}>
+                                                                <Loader2 size={16} className={styles.spinIcon} />
+                                                                <span>Searching titles...</span>
+                                                            </div>
+                                                        ) : displayedSearchResults.length > 0 ? (
+                                                            <div className={styles.searchResultsList} onScroll={closeSearchStatusDropdown}>
+                                                                {displayedSearchResults.slice(0, 10).map((item: any, idx: number) => {
+                                                                    const title = item.title || item.name || '';
+                                                                    const releaseYear = (item.release_date || item.first_air_date || '').split('-')[0];
+                                                                    const isAnim = isAnimeItem(item);
+                                                                    const mediaLabel = isAnim ? 'Anime' : (item.media_type === 'movie' ? 'Movie' : 'TV Series');
+                                                                    const posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w92${item.poster_path}` : '';
+                                                                    const existing = watchlist.find(w => w.tmdb_id === item.id);
+                                                                    const statusConfig = existing ? STATUS_COLORS[existing.status] : null;
+                                                                    const isExpanded = expandedResultId === item.id;
+                                                                    const isStatusOpen = searchStatusDropdownId === item.id;
+                                                                    const isRatingMode = searchRatingModeId === item.id;
+                                                                    const totalItems = Math.min(displayedSearchResults.length, 10);
+                                                                    const isDropup = totalItems >= 3 && idx >= totalItems - 2;
+
+                                                                    return (
+                                                                        <div
+                                                                            key={`${item.media_type}-${item.id}`}
+                                                                            className={`${styles.searchResultCard} ${isStatusOpen ? styles.searchResultCardActive : ''}`}
+                                                                        >
+                                                                            <div
+                                                                                className={styles.searchResultCardHeader}
+                                                                                onClick={() => setExpandedResultId(isExpanded ? null : item.id)}
+                                                                            >
+                                                                                {posterUrl ? (
+                                                                                    <img
+                                                                                        src={posterUrl}
+                                                                                        alt={title}
+                                                                                        className={styles.searchResultPoster}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleSelectSearchResult(item);
+                                                                                        }}
+                                                                                        title="Click to view details"
+                                                                                    />
+                                                                                ) : (
+                                                                                    <div
+                                                                                        className={styles.searchResultPosterFallback}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleSelectSearchResult(item);
+                                                                                        }}
+                                                                                    >
+                                                                                        {item.media_type === 'movie' ? <Film size={18} /> : <Tv size={18} />}
+                                                                                    </div>
+                                                                                )}
+
+                                                                                <div className={styles.searchResultInfo}>
+                                                                                    <span
+                                                                                        className={styles.searchResultTitle}
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleSelectSearchResult(item);
+                                                                                        }}
+                                                                                        title="Click to view details"
+                                                                                    >
+                                                                                        {title}
+                                                                                    </span>
+                                                                                    <div className={styles.searchResultMeta}>
+                                                                                        <span>{mediaLabel}</span>
+                                                                                        <span>•</span>
+                                                                                        <span>{releaseYear || 'N/A'}</span>
+                                                                                        {item.vote_average && item.vote_average > 0 ? (
+                                                                                            <span className={styles.searchResultRating}>
+                                                                                                <Star size={12} fill="#fbbf24" stroke="none" />
+                                                                                                {item.vote_average.toFixed(1)}
+                                                                                            </span>
+                                                                                        ) : null}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className={styles.searchResultActions} onClick={(e) => e.stopPropagation()}>
+                                                                                    <div className={styles.searchItemStatusContainer}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            data-recs-search-status-btn="true"
+                                                                                            className={existing ? styles.searchItemStatusBtnActive : styles.searchItemAddBtn}
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                if (isStatusOpen) {
+                                                                                                    closeSearchStatusDropdown();
+                                                                                                } else {
+                                                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                                                    const spaceBelow = window.innerHeight - rect.bottom;
+                                                                                                    const isDropup = spaceBelow < 250 && rect.top > 250;
+                                                                                                    if (isDropup) {
+                                                                                                        setSearchStatusDropdownCoords({
+                                                                                                            bottom: window.innerHeight - rect.top + 4,
+                                                                                                            right: window.innerWidth - rect.right,
+                                                                                                        });
+                                                                                                    } else {
+                                                                                                        setSearchStatusDropdownCoords({
+                                                                                                            top: rect.bottom + 4,
+                                                                                                            right: window.innerWidth - rect.right,
+                                                                                                        });
+                                                                                                    }
+                                                                                                    setSearchStatusDropdownId(item.id);
+                                                                                                    setSearchActiveDropdownItem(item);
+                                                                                                    setSearchRatingModeId(null);
+                                                                                                    setSearchPendingStatus(null);
+                                                                                                }
+                                                                                            }}
+                                                                                            style={existing && statusConfig ? { backgroundColor: `${statusConfig.color}22`, borderColor: statusConfig.color, color: statusConfig.color } : {}}
+                                                                                        >
+                                                                                            {existing && statusConfig ? (
+                                                                                                <>
+                                                                                                    <statusConfig.icon size={14} />
+                                                                                                    <span>{statusConfig.label}</span>
+                                                                                                    {existing.user_rating ? <span>• ★ {existing.user_rating}</span> : null}
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Plus size={14} />
+                                                                                                    <span>Add</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                            <ChevronDown size={13} className={isStatusOpen ? styles.rotateChevron : ''} />
+                                                                                        </button>
+                                                                                    </div>
+
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className={styles.searchItemDetailsIconBtn}
+                                                                                        onClick={() => handleSelectSearchResult(item)}
+                                                                                        title="View more details"
+                                                                                        aria-label="View more details"
+                                                                                    >
+                                                                                        <Info size={16} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {isExpanded && (
+                                                                                <div className={styles.searchResultExpandedDetails}>
+                                                                                    <p className={styles.searchResultOverview}>
+                                                                                        {item.overview || 'No synopsis available for this title.'}
+                                                                                    </p>
+                                                                                    <div className={styles.searchResultExpandedActions}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className={styles.searchResultPopoutBtn}
+                                                                                            onClick={() => handleSelectSearchResult(item)}
+                                                                                        >
+                                                                                            <Info size={14} />
+                                                                                            <span>View More Details</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : (
+                                                            <div className={styles.searchEmptyState}>
+                                                                <span>No {searchCategory !== 'all' ? searchCategory : ''} titles found matching &ldquo;{searchQuery}&rdquo;</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {currentHero ? (
+
+                                <div
+                                    className={styles.heroContent}
+                                    style={{
+                                        transform: dragOffset ? `translateX(${dragOffset * 0.55}px)` : undefined,
+                                        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                                    }}
+                                >
                                     <div className={styles.heroBadgesRow}>
                                         <span className={styles.heroRankBadge}>
                                             <Flame size={13} className={styles.heroRankIcon} />
@@ -431,12 +1037,19 @@ export default function RecommendationsPage() {
                                             {currentHero.media_type === 'tv' ? 'TV Series' : 'Movie'}
                                             {releaseYear ? ` · ${releaseYear}` : ''}
                                         </span>
-                                        {currentHero.service_name && (
-                                            <span className={styles.heroServiceBadge}>
-                                                <ServiceIcon name={currentHero.service_name} style={{ width: 14, height: 14, borderRadius: 3 }} />
-                                                {currentHero.service_name}
-                                            </span>
-                                        )}
+                                        {currentHero.service_name && (() => {
+                                            const isPopular = currentHero.service_name.toLowerCase().includes('popular');
+                                            return (
+                                                <span className={styles.heroServiceBadge}>
+                                                    {isPopular ? (
+                                                        <TrendingUp size={13} style={{ color: '#ec4899', flexShrink: 0 }} />
+                                                    ) : (
+                                                        <ServiceIcon name={currentHero.service_name} style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0 }} />
+                                                    )}
+                                                    <span>{currentHero.service_name}</span>
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
                                     <h2 className={styles.heroTitle}>{currentHero.items[0]}</h2>
@@ -444,26 +1057,54 @@ export default function RecommendationsPage() {
                                     <p className={styles.heroOverview}>{currentHero.overview || 'Popular content trending across major streaming networks.'}</p>
 
                                     <div className={styles.heroActionsRow}>
-                                        <button
-                                            type="button"
-                                            className={existingHeroItem ? styles.heroBtnInWatchlist : styles.heroBtnPrimary}
-                                            onClick={() => handleHeroWatchlistClick(currentHero, existingHeroItem?.id, existingHeroItem?.status)}
-                                            disabled={heroAdding}
-                                        >
-                                            {heroAdding ? (
-                                                <Loader2 size={16} className={styles.spinIcon} />
-                                            ) : existingHeroItem ? (
-                                                <>
-                                                    <Check size={16} />
-                                                    <span>In Watchlist ({existingHeroItem.status === 'watching' ? 'Watching' : 'Plan to Watch'})</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Plus size={16} />
-                                                    <span>Add to Watchlist</span>
-                                                </>
+                                        <div className={styles.heroStatusDropdownContainer} ref={heroStatusRef}>
+                                            <button
+                                                type="button"
+                                                className={existingHeroItem ? styles.heroBtnInWatchlist : styles.heroBtnPrimary}
+                                                onClick={() => setHeroStatusDropdownOpen(!heroStatusDropdownOpen)}
+                                                disabled={heroAdding}
+                                            >
+                                                {heroAdding ? (
+                                                    <Loader2 size={16} className={styles.spinIcon} />
+                                                ) : existingHeroItem ? (
+                                                    <>
+                                                        <Check size={16} className={styles.heroBtnIcon} />
+                                                        <span className={styles.heroBtnText}>{STATUS_COLORS[existingHeroItem.status]?.label || 'In Watchlist'}</span>
+                                                        <ChevronDown size={14} className={`${styles.heroBtnChevron} ${heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Plus size={16} className={styles.heroBtnIcon} />
+                                                        <span className={styles.heroBtnText}>Add to Watchlist</span>
+                                                        <ChevronDown size={14} className={`${styles.heroBtnChevron} ${heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
+                                                    </>
+                                                )}
+                                            </button>
+
+                                            {heroStatusDropdownOpen && (
+                                                <div className={styles.heroStatusMenu}>
+                                                    {Object.entries(STATUS_COLORS).map(([statusKey, config]) => {
+                                                        const IconComponent = config.icon;
+                                                        const isCurrent = existingHeroItem?.status === statusKey;
+                                                        return (
+                                                            <button
+                                                                key={statusKey}
+                                                                type="button"
+                                                                className={`${styles.heroStatusMenuItem} ${isCurrent ? styles.heroStatusMenuItemActive : ''}`}
+                                                                onClick={async () => {
+                                                                    setHeroStatusDropdownOpen(false);
+                                                                    await handleHeroStatusSelect(currentHero, statusKey, existingHeroItem?.id);
+                                                                }}
+                                                            >
+                                                                <IconComponent size={15} style={{ color: config.color, flexShrink: 0 }} />
+                                                                <span>{config.label}</span>
+                                                                {isCurrent && <Check size={14} style={{ marginLeft: 'auto', color: '#10b981' }} />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             )}
-                                        </button>
+                                        </div>
 
                                         <button
                                             type="button"
@@ -475,102 +1116,60 @@ export default function RecommendationsPage() {
                                         </button>
                                     </div>
                                 </div>
-
-                                <div className={styles.heroControlsRow}>
-                                    <div className={styles.heroIndicators}>
-                                        {filteredTrendingRecs.map((_, idx) => (
-                                            <button
-                                                key={idx}
-                                                type="button"
-                                                aria-label={`Slide ${idx + 1}`}
-                                                className={`${styles.heroDash} ${idx === safeHeroIndex ? styles.heroDashActive : ''}`}
-                                                onClick={() => setHeroIndex(idx)}
-                                            />
-                                        ))}
-                                    </div>
-
-                                    <div className={styles.heroArrows}>
-                                        <button
-                                            type="button"
-                                            aria-label="Previous slide"
-                                            className={styles.heroArrowBtn}
-                                            onClick={() => setHeroIndex((safeHeroIndex - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length)}
-                                        >
-                                            <ChevronLeft size={18} />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            aria-label="Next slide"
-                                            className={styles.heroArrowBtn}
-                                            onClick={() => setHeroIndex((safeHeroIndex + 1) % filteredTrendingRecs.length)}
-                                        >
-                                            <ChevronRight size={18} />
-                                        </button>
-                                    </div>
-                                </div>
+                        ) : (
+                            <div className={styles.emptyHeroState}>
+                                <p>No trending content available for this filter.</p>
                             </div>
                         )}
 
-                        {/* Remaining Trending Cards Rail */}
-                        <div className={styles.trendingRailHeader}>
-                            <h3 className={styles.trendingRailTitle}>Explore All Trending ({filteredTrendingRecs.length})</h3>
-                            <div className={styles.carouselControls}>
+                        <div className={styles.heroControlsRow} data-interactive="true">
+                            <div className={styles.heroIndicators}>
+                                {filteredTrendingRecs.map((_, idx) => {
+                                    const isActive = idx === safeHeroIndex;
+                                    return (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            aria-label={`Slide ${idx + 1}`}
+                                            className={`${styles.heroDash} ${isActive ? styles.heroDashActive : ''}`}
+                                            onClick={() => setHeroIndex(idx)}
+                                        >
+                                            {isActive && (
+                                                <span
+                                                    key={`progress-${safeHeroIndex}`}
+                                                    className={`${styles.heroDashProgressBar} ${isHeroHovered ? styles.heroDashPaused : ''}`}
+                                                />
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className={styles.heroArrows}>
                                 <button
-                                    onClick={handlePrevTrending}
-                                    disabled={trendingIndex === 0}
-                                    className={styles.carouselBtn}
+                                    type="button"
+                                    aria-label="Previous slide"
+                                    className={styles.heroArrowBtn}
+                                    onClick={() => setHeroIndex((safeHeroIndex - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length)}
                                 >
-                                    <ChevronLeft size={20} />
+                                    <ChevronLeft size={18} />
                                 </button>
                                 <button
-                                    onClick={handleNextTrending}
-                                    disabled={trendingIndex + trendingVisible >= filteredTrendingRecs.length}
-                                    className={styles.carouselBtn}
+                                    type="button"
+                                    aria-label="Next slide"
+                                    className={styles.heroArrowBtn}
+                                    onClick={() => setHeroIndex((safeHeroIndex + 1) % filteredTrendingRecs.length)}
                                 >
-                                    <ChevronRight size={20} />
+                                    <ChevronRight size={18} />
                                 </button>
                             </div>
                         </div>
-
-                        <div key={trendingTab} className={styles.grid}>
-                            {filteredTrendingRecs.slice(trendingIndex, trendingIndex + trendingVisible).map((rec, index) => {
-                                const tmdbId = rec.tmdb_id || 0;
-                                const existingItem = watchlist.find(w => w.tmdb_id === tmdbId || (w.tmdb_id === 0 && rec.items[0] === 'Title needed')); // Strict ID match preference
-
-                                return (
-                                    <div key={`${trendingIndex}-${index}`} className={styles.recommendationItem}>
-                                        <MediaCard
-                                            item={{
-                                                id: tmdbId,
-                                                dbId: existingItem?.id,
-                                                title: rec.items[0],
-                                                overview: rec.overview || '',
-                                                poster_path: rec.poster_path || '',
-                                                backdrop_path: rec.backdrop_path,
-                                                vote_average: rec.vote_average || 0,
-                                                media_type: rec.media_type || 'movie',
-                                                user_rating: existingItem?.user_rating || 0,
-                                                status: existingItem?.status,
-                                                genre_ids: rec.genre_ids,
-                                                original_language: rec.original_language,
-                                                current_season: existingItem?.current_season,
-                                                current_episode: existingItem?.current_episode,
-                                                notes: existingItem?.notes
-                                            }}
-                                            showServiceBadge={rec.service_name}
-                                            customBadgeColor="#db2777"
-                                            existingStatus={existingItem?.status}
-                                            onAddSuccess={fetchWatchlist}
-                                            onStatusChange={() => fetchWatchlist()}
-                                            onRemove={existingItem ? () => confirmRemove(existingItem.id, rec.items[0]) : undefined}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
+                    </div>
                 );
             })()}
+
+            {/* Lower Content inside Container */}
+            <div className={styles.container}>
 
             {/* Unused Subscriptions */}
             {cancelRecs.length > 0 && (
@@ -829,6 +1428,79 @@ export default function RecommendationsPage() {
                 onConfirm={handleRemove}
                 isDangerous={true}
             />
+
+            {typeof document !== 'undefined' && searchStatusDropdownId !== null && searchStatusDropdownCoords && searchActiveDropdownItem && createPortal(
+                <div
+                    className={`${styles.searchItemStatusMenu} ${searchStatusDropdownCoords.bottom !== undefined ? styles.searchItemStatusMenuDropup : ''}`}
+                    ref={searchStatusDropdownRef}
+                    style={{
+                        position: 'fixed',
+                        top: searchStatusDropdownCoords.top !== undefined ? `${searchStatusDropdownCoords.top}px` : undefined,
+                        bottom: searchStatusDropdownCoords.bottom !== undefined ? `${searchStatusDropdownCoords.bottom}px` : undefined,
+                        right: `${searchStatusDropdownCoords.right}px`,
+                        zIndex: 99999,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {searchRatingModeId === searchActiveDropdownItem.id ? (
+                        <div className={styles.searchRatingContainer}>
+                            <span className={styles.searchRatingLabel}>Rate this title</span>
+                            <StarRating
+                                rating={watchlist.find(w => w.tmdb_id === searchActiveDropdownItem.id)?.user_rating || 0}
+                                onRatingChange={(r) => handleSearchRatingSelect(searchActiveDropdownItem, r)}
+                                size={22}
+                                maxStars={10}
+                            />
+                            <button
+                                type="button"
+                                className={styles.searchSkipRatingBtn}
+                                onClick={handleSearchSkipRating}
+                            >
+                                Skip Rating
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            {Object.entries(STATUS_COLORS).map(([statusKey, config]) => {
+                                const IconComponent = config.icon;
+                                const existing = watchlist.find(w => w.tmdb_id === searchActiveDropdownItem.id);
+                                const isCurrent = existing?.status === statusKey;
+                                return (
+                                    <button
+                                        key={statusKey}
+                                        type="button"
+                                        className={`${styles.searchStatusMenuItem} ${isCurrent ? styles.searchStatusMenuItemActive : ''}`}
+                                        onClick={() => handleSearchStatusSelect(searchActiveDropdownItem, statusKey)}
+                                    >
+                                        <IconComponent size={14} style={{ color: config.color, flexShrink: 0 }} />
+                                        <span>{config.label}</span>
+                                        {isCurrent && <Check size={13} style={{ marginLeft: 'auto', color: '#10b981' }} />}
+                                    </button>
+                                );
+                            })}
+                            {(() => {
+                                const existing = watchlist.find(w => w.tmdb_id === searchActiveDropdownItem.id);
+                                if (!existing) return null;
+                                return (
+                                    <>
+                                        <div className={styles.searchStatusMenuDivider} />
+                                        <button
+                                            type="button"
+                                            className={`${styles.searchStatusMenuItem} ${styles.searchStatusMenuItemDelete}`}
+                                            onClick={() => handleSearchRemove(existing.id)}
+                                        >
+                                            <Trash2 size={14} />
+                                            <span>Remove</span>
+                                        </button>
+                                    </>
+                                );
+                            })()}
+                        </>
+                    )}
+                </div>,
+                document.body
+            )}
+        </div>
         </div>
     );
 }

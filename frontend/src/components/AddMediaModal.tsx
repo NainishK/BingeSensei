@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, Plus, Check, Clapperboard, CalendarClock, CheckCircle, ChevronDown, Trash2, Star, PauseCircle, XCircle, Film, Tv, Zap, Layers } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Search, Plus, Check, ChevronDown, Trash2, Star, Film, Tv, Clock, Info, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 import styles from './AddMediaModal.module.css';
 import StarRating from './StarRating';
-import { getStatusConfig, STATUS_COLORS } from '@/lib/statusColors';
+import { STATUS_COLORS } from '@/lib/statusColors';
+import MediaDetailsModal from './MediaDetailsModal';
+import ConfirmationModal from './ConfirmationModal';
 
 interface AddMediaModalProps {
     isOpen: boolean;
@@ -18,6 +21,7 @@ interface SearchResult {
     name?: string;
     media_type: 'movie' | 'tv';
     poster_path?: string;
+    backdrop_path?: string;
     release_date?: string;
     first_air_date?: string;
     vote_average?: number;
@@ -26,47 +30,115 @@ interface SearchResult {
     original_language?: string;
 }
 
-// Minimal shape for our internal tracking of existing items in this modal
 interface ExistingItemState {
-    id: number; // DB ID (watchlist_item.id)
+    id: number; // DB ID
     status: string;
     user_rating: number | null;
 }
 
-import ConfirmationModal from './ConfirmationModal';
+interface DetailMediaItem {
+    id: number;
+    dbId?: number;
+    title?: string;
+    name?: string;
+    poster_path?: string;
+    backdrop_path?: string;
+    overview?: string;
+    vote_average?: number;
+    media_type: string;
+    status?: string;
+    user_rating?: number;
+}
 
-export default function AddMediaModal({ isOpen, onClose, onAddSuccess, existingIds }: AddMediaModalProps) {
+export default function AddMediaModal({ isOpen, onClose, onAddSuccess }: AddMediaModalProps) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchFilter, setSearchFilter] = useState<'all' | 'movie' | 'tv' | 'anime'>('all');
 
-    // Map TMDB_ID -> ExistingItemState
+    // TMDB ID to ExistingItemState
     const [existingMap, setExistingMap] = useState<Map<number, ExistingItemState>>(new Map());
 
     const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
-    const [ratingModeId, setRatingModeId] = useState<number | null>(null); // If set, showing rating UI for this TMDB ID
-    const [pendingStatus, setPendingStatus] = useState<string | null>(null); // Status selected before rating
-
-    // Deletion State
-    const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-
+    const [dropdownCoords, setDropdownCoords] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+    const [activeDropdownItem, setActiveDropdownItem] = useState<SearchResult | null>(null);
+    const [ratingModeId, setRatingModeId] = useState<number | null>(null);
+    const [pendingStatus, setPendingStatus] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [selectedDetailItem, setSelectedDetailItem] = useState<DetailMediaItem | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<{ id: number; title: string } | null>(null);
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Fetch full watchlist context on open to populate existingMap
+    const closeDropdown = () => {
+        setOpenDropdownId(null);
+        setRatingModeId(null);
+        setPendingStatus(null);
+        setDropdownCoords(null);
+        setActiveDropdownItem(null);
+    };
+
     useEffect(() => {
         if (isOpen) {
             fetchExistingContext();
-            setTimeout(() => inputRef.current?.focus(), 100);
+            loadRecentSearches();
+            setTimeout(() => inputRef.current?.focus(), 80);
+        } else {
+            setQuery('');
+            setResults([]);
+            closeDropdown();
+            setExpandedId(null);
         }
     }, [isOpen]);
 
+    const loadRecentSearches = () => {
+        try {
+            const saved = localStorage.getItem('recs_recent_searches');
+            if (saved) {
+                setRecentSearches(JSON.parse(saved));
+            } else {
+                setRecentSearches(['Mobland', 'The Lord of the Rings', 'Avengers']);
+            }
+        } catch {
+            setRecentSearches(['Mobland', 'The Lord of the Rings', 'Avengers']);
+        }
+    };
+
+    const saveRecentSearch = (term: string) => {
+        const clean = term.trim();
+        if (!clean) return;
+        setRecentSearches(prev => {
+            const next = [clean, ...prev.filter(s => s.toLowerCase() !== clean.toLowerCase())].slice(0, 8);
+            try {
+                localStorage.setItem('recs_recent_searches', JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+    };
+
+    const clearRecentSearches = () => {
+        setRecentSearches([]);
+        try {
+            localStorage.removeItem('recs_recent_searches');
+        } catch {}
+    };
+
+    const removeRecentSearch = (e: React.MouseEvent, term: string) => {
+        e.stopPropagation();
+        setRecentSearches(prev => {
+            const next = prev.filter(s => s !== term);
+            try {
+                localStorage.setItem('recs_recent_searches', JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+    };
+
     const fetchExistingContext = async () => {
         try {
-            const res = await api.get('/watchlist/?limit=1000'); // Get all
+            const res = await api.get('/watchlist/?limit=1000');
             const map = new Map<number, ExistingItemState>();
             res.data.forEach((item: any) => {
                 if (item.tmdb_id) {
@@ -79,105 +151,129 @@ export default function AddMediaModal({ isOpen, onClose, onAddSuccess, existingI
             });
             setExistingMap(map);
         } catch (e) {
-            console.error("Failed to fetch context", e);
+            console.error('Failed to fetch context', e);
         }
     };
 
-    // Close dropdown when clicking outside
+    // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setOpenDropdownId(null);
-                setRatingModeId(null);
-                setPendingStatus(null);
+            if (selectedDetailItem || itemToDelete) return;
+            const target = event.target as HTMLElement;
+            if (target && target.closest('[data-status-btn="true"]')) {
+                return;
+            }
+            if (dropdownRef.current && !dropdownRef.current.contains(target as Node)) {
+                closeDropdown();
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        window.addEventListener('resize', closeDropdown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('resize', closeDropdown);
+        };
+    }, [selectedDetailItem, itemToDelete]);
 
     // Debounced search
     useEffect(() => {
-        const timer = setTimeout(async () => {
-            if (!query.trim()) {
-                setResults([]);
-                return;
-            }
+        if (!query.trim() || query.trim().length < 2) {
+            setResults([]);
+            setLoading(false);
+            return;
+        }
 
+        const timer = setTimeout(async () => {
             setLoading(true);
             try {
-                const response = await api.get(`/search?query=${encodeURIComponent(query)}`);
-                const validResults = response.data.results
+                const response = await api.get(`/search?query=${encodeURIComponent(query.trim())}`);
+                const validResults = (response.data?.results || [])
                     .filter((item: SearchResult) => item.media_type === 'movie' || item.media_type === 'tv')
                     .slice(0, 10);
                 setResults(validResults);
             } catch (err) {
-                console.error("Search failed", err);
+                console.error('Search failed', err);
             } finally {
                 setLoading(false);
             }
-        }, 500);
+        }, 300);
 
         return () => clearTimeout(timer);
     }, [query]);
 
-    const handleDropdownToggle = (tmdbId: number) => {
-        if (openDropdownId === tmdbId) {
-            setOpenDropdownId(null);
-            setRatingModeId(null);
-        } else {
-            setOpenDropdownId(tmdbId);
-            setRatingModeId(null);
-        }
+    const isAnimeItem = (item: any) => {
+        const hasAnimGenre = item.genre_ids?.includes(16);
+        const isJapanese = item.original_language === 'ja';
+        return hasAnimGenre && (isJapanese || item.media_type === 'tv' || item.origin_country?.includes('JP'));
     };
 
-    const handleExpand = (id: number) => {
-        setExpandedId(prev => (prev === id ? null : id));
+    const displayedResults = results.filter(item => {
+        if (searchFilter === 'all') return true;
+        if (searchFilter === 'anime') return isAnimeItem(item);
+        if (searchFilter === 'movie') return item.media_type === 'movie' && !isAnimeItem(item);
+        if (searchFilter === 'tv') return item.media_type === 'tv' && !isAnimeItem(item);
+        return true;
+    });
+
+    const handleSelectSearchResult = (item: SearchResult) => {
+        saveRecentSearch(item.title || item.name || query);
+        const existing = existingMap.get(item.id);
+        setSelectedDetailItem({
+            id: item.id,
+            dbId: existing?.id,
+            title: item.title || item.name || '',
+            name: item.name,
+            overview: item.overview || '',
+            poster_path: item.poster_path || '',
+            backdrop_path: item.backdrop_path,
+            vote_average: item.vote_average,
+            media_type: item.media_type,
+            status: existing?.status,
+            user_rating: existing?.user_rating ?? undefined
+        });
     };
 
     const handleStatusSelect = async (item: SearchResult, status: string) => {
-        // Save status immediately first
-        // If status is 'watched' or 'watching', keep dropdown open and show rating UI
         const showRating = status === 'watched' || status === 'watching';
-
-        // Pass false to keep dropdown open if showing rating
         await executeSave(item, status, null, !showRating);
-
         if (showRating) {
             setRatingModeId(item.id);
             setPendingStatus(status);
+            setOpenDropdownId(item.id);
+            setActiveDropdownItem(item);
+        } else {
+            closeDropdown();
         }
     };
 
     const handleRatingSelect = async (item: SearchResult, rating: number) => {
-        // We have a pending status and a new rating
         await executeSave(item, pendingStatus || 'watched', rating, true);
     };
 
-    const executeSave = async (item: SearchResult, status: string, rating: number | null, closeDropdown: boolean = true) => {
-        const existing = existingMap.get(item.id);
+    const handleSkipRating = () => {
+        closeDropdown();
+    };
 
+    const executeSave = async (item: SearchResult, status: string, rating: number | null, shouldClose: boolean = true) => {
+        const existing = existingMap.get(item.id);
         try {
             if (existing) {
-                // Update Existing
                 await api.put(`/watchlist/${existing.id}/status?status=${status}`);
                 if (rating !== null) {
                     await api.put(`/watchlist/${existing.id}/rating`, { rating });
                 }
-
-                // Update local map
                 setExistingMap(prev => new Map(prev).set(item.id, {
                     ...existing,
                     status: status,
                     user_rating: rating !== null ? rating : existing.user_rating
                 }));
             } else {
-                // Create New
                 const res = await api.post('/watchlist/', {
                     tmdb_id: item.id,
                     title: item.title || item.name || 'Unknown',
                     media_type: item.media_type,
                     poster_path: item.poster_path,
+                    backdrop_path: item.backdrop_path,
                     vote_average: item.vote_average,
                     overview: item.overview,
                     status: status,
@@ -185,50 +281,43 @@ export default function AddMediaModal({ isOpen, onClose, onAddSuccess, existingI
                     original_language: item.original_language,
                     user_rating: rating
                 });
-
-                // Update local map
                 setExistingMap(prev => new Map(prev).set(item.id, {
                     id: res.data.id,
                     status: status,
                     user_rating: rating
                 }));
             }
-
-            if (closeDropdown) {
-                setOpenDropdownId(null);
-                setRatingModeId(null);
+            if (shouldClose) {
+                closeDropdown();
             }
-            onAddSuccess(); // Trigger parent refresh if needed
+            saveRecentSearch(item.title || item.name || query);
+            onAddSuccess();
         } catch (error) {
-            console.error("Failed to save", error);
-            alert("Failed to save. check console.");
+            console.error('Failed to save', error);
         }
     };
 
-    const triggerDelete = (tmdbId: number) => {
-        setConfirmDeleteId(tmdbId);
-        setOpenDropdownId(null); // Close dropdown
+    const triggerDelete = (item: SearchResult) => {
+        const existing = existingMap.get(item.id);
+        if (!existing) return;
+        setItemToDelete({
+            id: existing.id,
+            title: item.title || item.name || 'this title'
+        });
+        closeDropdown();
     };
 
     const executeDelete = async () => {
-        if (!confirmDeleteId) return;
-
-        const existing = existingMap.get(confirmDeleteId);
-        if (!existing) return;
-
+        if (!itemToDelete) return;
         try {
-            await api.delete(`/watchlist/${existing.id}`);
-            const newMap = new Map(existingMap);
-            newMap.delete(confirmDeleteId);
-            setExistingMap(newMap);
-            setConfirmDeleteId(null);
+            await api.delete(`/watchlist/${itemToDelete.id}`);
+            await fetchExistingContext();
+            setItemToDelete(null);
             onAddSuccess();
         } catch (error) {
-            console.error("Failed to delete", error);
+            console.error('Failed to delete', error);
         }
     };
-
-
 
     if (!isOpen) return null;
 
@@ -238,8 +327,8 @@ export default function AddMediaModal({ isOpen, onClose, onAddSuccess, existingI
                 <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
                     <div className={styles.header}>
                         <h2 className={styles.title}>Add to Watchlist</h2>
-                        <button className={styles.closeButton} onClick={onClose}>
-                            <X size={20} />
+                        <button className={styles.closeButton} onClick={onClose} aria-label="Close modal">
+                            <X size={18} />
                         </button>
                     </div>
 
@@ -250,233 +339,396 @@ export default function AddMediaModal({ isOpen, onClose, onAddSuccess, existingI
                                 ref={inputRef}
                                 type="text"
                                 className={styles.searchInput}
-                                placeholder="Search for movies or TV shows..."
+                                placeholder="Search movies, shows, and anime..."
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                             />
                             {query && (
                                 <button
+                                    type="button"
                                     className={styles.clearButton}
                                     onClick={() => {
                                         setQuery('');
                                         inputRef.current?.focus();
                                     }}
-                                    style={{
-                                        position: 'absolute',
-                                        right: '12px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: 'var(--muted-foreground)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        padding: 4
-                                    }}
+                                    title="Clear text"
                                 >
-                                    <X size={16} />
+                                    <X size={15} />
                                 </button>
                             )}
                         </div>
-                        <div className={styles.filterRow}>
-                            {[
-                                { key: 'all' as const, label: 'All', icon: Layers },
-                                { key: 'movie' as const, label: 'Movies', icon: Film },
-                                { key: 'tv' as const, label: 'TV Shows', icon: Tv },
-                                { key: 'anime' as const, label: 'Anime', icon: Zap },
-                            ].map(chip => {
-                                const count = results.length === 0 ? null
-                                    : chip.key === 'all'
-                                        ? results.length
-                                        : chip.key === 'movie'
-                                            ? results.filter(r => r.media_type === 'movie').length
-                                            : chip.key === 'tv'
-                                                ? results.filter(r => r.media_type === 'tv' && !(r.original_language === 'ja' && r.genre_ids?.includes(16))).length
-                                                : results.filter(r => r.original_language === 'ja' && r.genre_ids?.includes(16)).length;
-                                return (
-                                    <button
-                                        key={chip.key}
-                                        className={`${styles.filterChip} ${searchFilter === chip.key ? styles.filterChipActive : ''}`}
-                                        onClick={() => setSearchFilter(chip.key)}
-                                    >
-                                        <chip.icon size={13} />
-                                        {chip.label}
-                                        {count !== null && <span className={styles.filterChipCount}>{count}</span>}
-                                    </button>
-                                );
-                            })}
+
+                        {/* Category filter tabs with live counts */}
+                        <div className={styles.searchCategoryTabs}>
+                            <button
+                                type="button"
+                                className={`${styles.searchCategoryTab} ${searchFilter === 'all' ? styles.searchCategoryTabActive : ''}`}
+                                onClick={() => setSearchFilter('all')}
+                            >
+                                <span>All</span>
+                                {results.length > 0 && <span className={styles.searchCategoryCount}>{results.length}</span>}
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.searchCategoryTab} ${searchFilter === 'movie' ? styles.searchCategoryTabActive : ''}`}
+                                onClick={() => setSearchFilter('movie')}
+                            >
+                                <span>Movies</span>
+                                {results.length > 0 && (
+                                    <span className={styles.searchCategoryCount}>
+                                        {results.filter(r => r.media_type === 'movie' && !isAnimeItem(r)).length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.searchCategoryTab} ${searchFilter === 'tv' ? styles.searchCategoryTabActive : ''}`}
+                                onClick={() => setSearchFilter('tv')}
+                            >
+                                <span>TV Shows</span>
+                                {results.length > 0 && (
+                                    <span className={styles.searchCategoryCount}>
+                                        {results.filter(r => r.media_type === 'tv' && !isAnimeItem(r)).length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                type="button"
+                                className={`${styles.searchCategoryTab} ${searchFilter === 'anime' ? styles.searchCategoryTabActive : ''}`}
+                                onClick={() => setSearchFilter('anime')}
+                            >
+                                <span>Anime</span>
+                                {results.length > 0 && (
+                                    <span className={styles.searchCategoryCount}>
+                                        {results.filter(r => isAnimeItem(r)).length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
                     </div>
 
-                    <div className={`${styles.resultsList} ${results.length > 0 ? styles.resultsListHasItems : ''}`}>
-                        {loading && <div className={styles.noResults}>Searching...</div>}
-
-                        {!loading && query && results.length === 0 && (
-                            <div className={styles.noResults}>No results found for "{query}"</div>
-                        )}
-
-                        {!loading && results
-                            .filter(item => {
-                                if (searchFilter === 'all') return true;
-                                const isAnime = item.original_language === 'ja' && item.genre_ids?.includes(16);
-                                if (searchFilter === 'anime') return isAnime;
-                                if (searchFilter === 'movie') return item.media_type === 'movie';
-                                if (searchFilter === 'tv') return item.media_type === 'tv' && !isAnime;
-                                return true;
-                            })
-                            .map(item => {
-                            const year = (item.release_date || item.first_air_date || '').split('-')[0];
-                            const existing = existingMap.get(item.id);
-                            const isDropdownOpen = openDropdownId === item.id;
-                            const isExpanded = expandedId === item.id;
-                            const isRatingMode = ratingModeId === item.id;
-
-                            const statusConfig = existing ? getStatusConfig(existing.status) : getStatusConfig('new');
-
-                            return (
-                                <div
-                                    key={item.id}
-                                    className={`${styles.resultItem} ${isDropdownOpen ? styles.resultItemActive : ''}`}
-                                    onClick={() => handleExpand(item.id)}
-                                >
-                                    <div className={styles.itemMain}>
-                                        {item.poster_path ? (
-                                            <img
-                                                src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
-                                                alt={item.title || item.name}
-                                                className={styles.poster}
-                                            />
-                                        ) : (
-                                            <div className={styles.poster} />
-                                        )}
-
-                                        <div className={styles.info}>
-                                            <h4 className={styles.itemTitle}>{item.title || item.name}</h4>
-                                            <div className={styles.itemMeta}>
-                                                <span>{item.media_type === 'tv' ? 'TV Series' : 'Movie'}</span>
-                                                <span>•</span>
-                                                <span>{year}</span>
-                                                {item.vote_average && item.vote_average > 0 && (
-                                                    <div className={styles.rating}>
-                                                        <Star size={12} fill="currentColor" />
-                                                        {item.vote_average.toFixed(1)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            className={styles.actions}
-                                            ref={isDropdownOpen ? dropdownRef : null}
-                                            onClick={(e) => e.stopPropagation()}
+                    <div className={styles.resultsList} onScroll={closeDropdown}>
+                        {/* Dropdown content: Recent Searches vs Results */}
+                        {query.trim().length < 2 ? (
+                            <div className={styles.recentSearchesSection}>
+                                <div className={styles.recentSearchesHeader}>
+                                    <span>Recent searches</span>
+                                    {recentSearches.length > 0 && (
+                                        <button
+                                            type="button"
+                                            className={styles.clearRecentBtn}
+                                            onClick={clearRecentSearches}
                                         >
-                                            <button
-                                                className={styles.addButton}
-                                                onClick={() => handleDropdownToggle(item.id)}
-                                                style={existing ? { backgroundColor: statusConfig.color } : {}}
-                                            >
-                                                {existing ? (
-                                                    <>
-                                                        <statusConfig.icon size={16} />
-                                                        {statusConfig.label}
-                                                        {existing.user_rating ? ` • ★ ${existing.user_rating}` : ''}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Plus size={16} /> Add
-                                                    </>
-                                                )}
-                                                <ChevronDown size={14} style={{ opacity: 0.7 }} />
-                                            </button>
-
-                                            {isDropdownOpen && (
-                                                <div className={styles.dropdownMenu}>
-                                                    {isRatingMode ? (
-                                                        <div className={styles.ratingContainer}>
-                                                            <span className={styles.ratingLabel}>Rate this title</span>
-                                                            <StarRating
-                                                                rating={0}
-                                                                onRatingChange={(r) => handleRatingSelect(item, r)}
-                                                                size={24}
-                                                                maxStars={10}
-                                                            />
-                                                            <button
-                                                                className={styles.dropdownItem}
-                                                                style={{ justifyContent: 'center', fontSize: '0.8rem', color: 'var(--muted-foreground)' }}
-                                                                onClick={() => executeSave(item, pendingStatus || 'watched', null)}
-                                                            >
-                                                                Skip Rating
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            {Object.entries(STATUS_COLORS).map(([key, config]) => {
-                                                                const Icon = config.icon;
-                                                                return (
-                                                                    <button
-                                                                        key={key}
-                                                                        className={styles.dropdownItem}
-                                                                        onClick={() => handleStatusSelect(item, key as any)}
-                                                                    >
-                                                                        <Icon size={16} style={{ color: config.color }} />
-                                                                        <span className={styles.dropdownLabel}>{config.label}</span>
-                                                                    </button>
-                                                                );
-                                                            })}
-
-                                                            {existing && (
-                                                                <>
-                                                                    <div style={{ height: 1, background: '#f3f4f6', margin: '4px 0' }} />
-                                                                    <button
-                                                                        className={`${styles.dropdownItem} ${styles.deleteButton}`}
-                                                                        onClick={() => triggerDelete(item.id)}
-                                                                    >
-                                                                        <Trash2 size={16} />
-                                                                        <span className={styles.dropdownLabel}>Remove</span>
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {isExpanded && (
-                                        <div className={styles.details} onClick={e => e.stopPropagation()}>
-                                            <div className={styles.detailsHeader}>
-                                                <div className={styles.detailsText}>
-                                                    {item.overview || <span className={styles.detailsEmpty}>No synopsis available.</span>}
-                                                </div>
-                                                <a
-                                                    href={`https://www.google.com/search?q=${encodeURIComponent((item.title || item.name || '') + ' ' + item.media_type)}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className={styles.webSearchBtn}
-                                                >
-                                                    <Search size={14} /> Web Search
-                                                </a>
-                                            </div>
-                                        </div>
+                                            Clear
+                                        </button>
                                     )}
                                 </div>
-                            );
-                        })}
-                    </div >
-                </div >
-            </div >
+                                {recentSearches.length > 0 ? (
+                                    <div className={styles.recentSearchesList}>
+                                        {recentSearches.map((term, idx) => (
+                                            <div
+                                                key={idx}
+                                                className={styles.recentSearchItem}
+                                                onClick={() => {
+                                                    setQuery(term);
+                                                    inputRef.current?.focus();
+                                                }}
+                                            >
+                                                <div className={styles.recentSearchItemLeft}>
+                                                    <Clock size={13} className={styles.recentSearchClock} />
+                                                    <span>{term}</span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className={styles.removeRecentItemBtn}
+                                                    onClick={(e) => removeRecentSearch(e, term)}
+                                                    title="Remove"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className={styles.emptyRecentNotice}>No recent searches</p>
+                                )}
+                            </div>
+                        ) : loading ? (
+                            <div className={styles.noResults}>Searching...</div>
+                        ) : displayedResults.length > 0 ? (
+                            displayedResults.map((item, idx) => {
+                                const title = item.title || item.name || '';
+                                const releaseYear = (item.release_date || item.first_air_date || '').split('-')[0];
+                                const isAnim = isAnimeItem(item);
+                                const mediaLabel = isAnim ? 'Anime' : (item.media_type === 'movie' ? 'Movie' : 'TV Series');
+                                const posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w92${item.poster_path}` : '';
+                                const existing = existingMap.get(item.id);
+                                const statusConfig = existing ? STATUS_COLORS[existing.status] : null;
+                                const isExpanded = expandedId === item.id;
+                                const isStatusOpen = openDropdownId === item.id;
+                                const isRatingMode = ratingModeId === item.id;
+                                const totalItems = displayedResults.length;
+                                const isDropup = totalItems >= 3 && idx >= totalItems - 2;
 
-            <ConfirmationModal
-                isOpen={!!confirmDeleteId}
-                onClose={() => setConfirmDeleteId(null)}
-                onConfirm={executeDelete}
-                title="Remove from Watchlist?"
-                message="Are you sure you want to remove this item? This action cannot be undone."
-                confirmLabel="Remove"
-                isDangerous={true}
-            />
+                                return (
+                                    <div
+                                        key={`${item.media_type}-${item.id}`}
+                                        className={`${styles.searchResultCard} ${isStatusOpen ? styles.searchResultCardActive : ''}`}
+                                    >
+                                        <div
+                                            className={styles.searchResultCardHeader}
+                                            onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                                        >
+                                            {posterUrl ? (
+                                                <img
+                                                    src={posterUrl}
+                                                    alt={title}
+                                                    className={styles.searchResultPoster}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelectSearchResult(item);
+                                                    }}
+                                                    title="Click to view details"
+                                                />
+                                            ) : (
+                                                <div
+                                                    className={styles.searchResultPosterFallback}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelectSearchResult(item);
+                                                    }}
+                                                >
+                                                    {item.media_type === 'movie' ? <Film size={18} /> : <Tv size={18} />}
+                                                </div>
+                                            )}
+
+                                            <div className={styles.searchResultInfo}>
+                                                <span
+                                                    className={styles.searchResultTitle}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelectSearchResult(item);
+                                                    }}
+                                                    title="Click to view details"
+                                                >
+                                                    {title}
+                                                </span>
+                                                <div className={styles.searchResultMeta}>
+                                                    <span>{mediaLabel}</span>
+                                                    <span>•</span>
+                                                    <span>{releaseYear || 'N/A'}</span>
+                                                    {item.vote_average && item.vote_average > 0 ? (
+                                                        <span className={styles.searchResultRating}>
+                                                            <Star size={12} fill="#fbbf24" stroke="none" />
+                                                            {item.vote_average.toFixed(1)}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+
+                                            <div className={styles.searchResultActions} onClick={(e) => e.stopPropagation()}>
+                                                <div className={styles.searchItemStatusContainer}>
+                                                    <button
+                                                        type="button"
+                                                        data-status-btn="true"
+                                                        className={existing ? styles.searchItemStatusBtnActive : styles.searchItemAddBtn}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (openDropdownId === item.id) {
+                                                                closeDropdown();
+                                                            } else {
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                const spaceBelow = window.innerHeight - rect.bottom;
+                                                                const isDropup = spaceBelow < 250 && rect.top > 250;
+                                                                if (isDropup) {
+                                                                    setDropdownCoords({
+                                                                        bottom: window.innerHeight - rect.top + 4,
+                                                                        right: window.innerWidth - rect.right,
+                                                                    });
+                                                                } else {
+                                                                    setDropdownCoords({
+                                                                        top: rect.bottom + 4,
+                                                                        right: window.innerWidth - rect.right,
+                                                                    });
+                                                                }
+                                                                setOpenDropdownId(item.id);
+                                                                setActiveDropdownItem(item);
+                                                                setRatingModeId(null);
+                                                                setPendingStatus(null);
+                                                            }
+                                                        }}
+                                                        style={existing && statusConfig ? { backgroundColor: `${statusConfig.color}22`, borderColor: statusConfig.color, color: statusConfig.color } : {}}
+                                                    >
+                                                        {existing && statusConfig ? (
+                                                            <>
+                                                                <statusConfig.icon size={14} />
+                                                                <span>{statusConfig.label}</span>
+                                                                {existing.user_rating ? <span>• ★ {existing.user_rating}</span> : null}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Plus size={14} />
+                                                                <span>Add</span>
+                                                            </>
+                                                        )}
+                                                        <ChevronDown size={13} className={isStatusOpen ? styles.rotateChevron : ''} />
+                                                    </button>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    className={styles.searchItemDetailsIconBtn}
+                                                    onClick={() => handleSelectSearchResult(item)}
+                                                    title="View more details"
+                                                    aria-label="View more details"
+                                                >
+                                                    <Info size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {isExpanded && (
+                                            <div className={styles.searchResultExpandedDetails}>
+                                                <p className={styles.searchResultOverview}>
+                                                    {item.overview || 'No synopsis available for this title.'}
+                                                </p>
+                                                <div className={styles.searchResultExpandedActions}>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.searchResultPopoutBtn}
+                                                        onClick={() => handleSelectSearchResult(item)}
+                                                    >
+                                                        <Info size={14} />
+                                                        <span>View More Details</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className={styles.noResults}>
+                                No {searchFilter !== 'all' ? searchFilter : ''} titles found matching &ldquo;{query}&rdquo;
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {selectedDetailItem && (
+                <MediaDetailsModal
+                    visible={!!selectedDetailItem}
+                    onClose={() => setSelectedDetailItem(null)}
+                    mediaType={selectedDetailItem.media_type}
+                    tmdbId={selectedDetailItem.id}
+                    initialData={{
+                        title: selectedDetailItem.title || selectedDetailItem.name || '',
+                        poster_path: selectedDetailItem.poster_path,
+                        overview: selectedDetailItem.overview || '',
+                        vote_average: selectedDetailItem.vote_average
+                    }}
+                    dbId={selectedDetailItem.dbId}
+                    userRating={selectedDetailItem.user_rating}
+                    onRate={async (rating) => {
+                        if (selectedDetailItem.dbId) {
+                            try {
+                                await api.put(`/watchlist/${selectedDetailItem.dbId}/rating`, { rating });
+                                setExistingMap(prev => {
+                                    const next = new Map(prev);
+                                    const ex = next.get(selectedDetailItem.id);
+                                    if (ex) next.set(selectedDetailItem.id, { ...ex, user_rating: rating });
+                                    return next;
+                                });
+                                setSelectedDetailItem((prev: DetailMediaItem | null) => prev ? { ...prev, user_rating: rating } : null);
+                                onAddSuccess();
+                            } catch (e) {
+                                console.error('Failed to rate item', e);
+                            }
+                        }
+                    }}
+                />
+            )}
+
+            {itemToDelete && (
+                <ConfirmationModal
+                    isOpen={!!itemToDelete}
+                    onClose={() => setItemToDelete(null)}
+                    title="Remove from Watchlist"
+                    message={`Are you sure you want to remove "${itemToDelete.title}" from your watchlist?`}
+                    confirmLabel="Remove"
+                    isDangerous={true}
+                    onConfirm={executeDelete}
+                />
+            )}
+
+            {typeof document !== 'undefined' && openDropdownId !== null && dropdownCoords && activeDropdownItem && createPortal(
+                <div
+                    className={`${styles.searchItemStatusMenu} ${dropdownCoords.bottom !== undefined ? styles.searchItemStatusMenuDropup : ''}`}
+                    ref={dropdownRef}
+                    style={{
+                        position: 'fixed',
+                        top: dropdownCoords.top !== undefined ? `${dropdownCoords.top}px` : undefined,
+                        bottom: dropdownCoords.bottom !== undefined ? `${dropdownCoords.bottom}px` : undefined,
+                        right: `${dropdownCoords.right}px`,
+                        zIndex: 99999,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {ratingModeId === activeDropdownItem.id ? (
+                        <div className={styles.searchRatingContainer}>
+                            <span className={styles.searchRatingLabel}>Rate this title</span>
+                            <StarRating
+                                rating={existingMap.get(activeDropdownItem.id)?.user_rating || 0}
+                                onRatingChange={(r) => handleRatingSelect(activeDropdownItem, r)}
+                                size={22}
+                                maxStars={10}
+                            />
+                            <button
+                                type="button"
+                                className={styles.searchSkipRatingBtn}
+                                onClick={handleSkipRating}
+                            >
+                                Skip Rating
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            {Object.entries(STATUS_COLORS).map(([statusKey, config]) => {
+                                const IconComponent = config.icon;
+                                const existing = existingMap.get(activeDropdownItem.id);
+                                const isCurrent = existing?.status === statusKey;
+                                return (
+                                    <button
+                                        key={statusKey}
+                                        type="button"
+                                        className={`${styles.searchStatusMenuItem} ${isCurrent ? styles.searchStatusMenuItemActive : ''}`}
+                                        onClick={() => handleStatusSelect(activeDropdownItem, statusKey)}
+                                    >
+                                        <IconComponent size={14} style={{ color: config.color, flexShrink: 0 }} />
+                                        <span>{config.label}</span>
+                                        {isCurrent && <Check size={13} style={{ marginLeft: 'auto', color: '#10b981' }} />}
+                                    </button>
+                                );
+                            })}
+                            {existingMap.has(activeDropdownItem.id) && (
+                                <>
+                                    <div className={styles.searchStatusMenuDivider} />
+                                    <button
+                                        type="button"
+                                        className={`${styles.searchStatusMenuItem} ${styles.searchStatusMenuItemDelete}`}
+                                        onClick={() => triggerDelete(activeDropdownItem)}
+                                    >
+                                        <Trash2 size={14} />
+                                        <span>Remove</span>
+                                    </button>
+                                </>
+                            )}
+                        </>
+                    )}
+                </div>,
+                document.body
+            )}
         </>
     );
 }

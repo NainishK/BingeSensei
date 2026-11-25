@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Query, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks, Query, UploadFile, File, Form, Body
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -1110,6 +1110,35 @@ def bg_refresh_recs(user_id: int):
             bg_db.close()
     except Exception as e:
         print(f"[BG_REFRESH] Error refreshing recommendations for user {user_id}: {e}")
+
+@app.put("/watchlist/{item_id}", response_model=schemas.WatchlistItem)
+def update_watchlist_item_generic(
+    item_id: int, 
+    payload: dict = Body(...),
+    background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(dependencies.get_current_user)
+):
+    status_val = payload.get("status")
+    rating_val = payload.get("rating")
+    notes_val = payload.get("notes")
+    db_item = None
+    if status_val is not None:
+        db_item = crud.update_watchlist_item_status(db, item_id=item_id, user_id=current_user.id, status=status_val)
+    if rating_val is not None:
+        db_item = crud.update_watchlist_item_rating(db, item_id=item_id, user_id=current_user.id, rating=int(rating_val))
+    if notes_val is not None:
+        db_item = crud.update_watchlist_item_notes(db, item_id=item_id, user_id=current_user.id, notes=notes_val)
+    if db_item is None:
+        db_item = db.query(models.WatchlistItem).filter(
+            models.WatchlistItem.id == item_id,
+            models.WatchlistItem.user_id == current_user.id
+        ).first()
+        if db_item is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+    if background_tasks:
+        background_tasks.add_task(bg_refresh_recs, current_user.id)
+    return db_item
 
 @app.put("/watchlist/{item_id}/status", response_model=schemas.WatchlistItem)
 def update_watchlist_status(
