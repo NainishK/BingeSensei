@@ -11,9 +11,11 @@ const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342';
 interface Props {
     items: PublicMediaItem[];
     loading: boolean;
+    activeItemId?: number;
+    onSelectItem?: (item: PublicMediaItem) => void;
 }
 
-export default function TrendingShelf({ items, loading }: Props) {
+export default function TrendingShelf({ items, loading, activeItemId, onSelectItem }: Props) {
     const [selected, setSelected] = useState<PublicMediaItem | null>(null);
 
     if (loading) {
@@ -32,8 +34,15 @@ export default function TrendingShelf({ items, loading }: Props) {
                 {items.map(item => (
                     <button
                         key={`${item.media_type}-${item.id}`}
-                        className={styles.card}
-                        onClick={() => setSelected(item)}
+                        type="button"
+                        className={`${styles.card} ${activeItemId === item.id ? styles.cardActive : ''}`}
+                        onClick={() => {
+                            if (onSelectItem) {
+                                onSelectItem(item);
+                            } else {
+                                setSelected(item);
+                            }
+                        }}
                     >
                         {item.poster_path ? (
                             <img

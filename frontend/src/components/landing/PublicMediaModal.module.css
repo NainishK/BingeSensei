@@ -242,6 +242,45 @@
     margin-bottom: 1.25rem;
 }
 
+.externalLinksContainer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.25rem;
+}
+
+.externalLinksLabel {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.externalLinksBadges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.extIconLink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease, opacity 0.2s ease;
+    border-radius: 6px;
+    opacity: 0.92;
+}
+
+.extIconLink:hover {
+    transform: translateY(-2px) scale(1.06);
+    filter: brightness(1.12);
+    opacity: 1;
+}
+
+.extAnilistIcon {
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
 .actions {
     display: flex;
     gap: 0.75rem;

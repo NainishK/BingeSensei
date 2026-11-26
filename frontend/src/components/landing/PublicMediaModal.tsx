@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { X, Star, Film, Tv, ExternalLink } from 'lucide-react';
 import { PublicMediaItem } from '@/lib/publicTypes';
+import { ImdbLogo, MalLogo, AnilistLogo, TmdbLogo } from '../DatabaseLogos';
 import styles from './PublicMediaModal.module.css';
 
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/';
@@ -54,6 +55,11 @@ export default function PublicMediaModal({ item, onClose }: Props) {
         .slice(0, 4);
     const year = item.release_date ? item.release_date.slice(0, 4) : null;
     const searchQuery = encodeURIComponent(`Watch ${item.title}`);
+    const isAnime = Boolean(item.original_language === 'ja' && item.genre_ids?.includes(16));
+    const imdbUrl = `https://www.imdb.com/find/?q=${encodeURIComponent(item.title)}`;
+    const malUrl = `https://myanimelist.net/anime.php?q=${encodeURIComponent(item.title)}&cat=anime`;
+    const anilistUrl = `https://anilist.co/search/anime?search=${encodeURIComponent(item.title)}`;
+    const tmdbUrl = `https://www.themoviedb.org/${item.media_type}/${item.id}`;
 
     return (
         <div className={styles.overlay} onClick={onClose}>
@@ -107,6 +113,60 @@ export default function PublicMediaModal({ item, onClose }: Props) {
                             </div>
                         )}
 
+                        {/* External Database Links (IMDb, MAL, AniList, TMDB) */}
+                        <div className={styles.externalLinksContainer}>
+                            <span className={styles.externalLinksLabel}>Links:</span>
+                            <div className={styles.externalLinksBadges}>
+                                <a
+                                    href={imdbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.extIconLink}
+                                    title="IMDb"
+                                    aria-label="Search on IMDb"
+                                >
+                                    <ImdbLogo height={21} />
+                                </a>
+
+                                {isAnime && (
+                                    <a
+                                        href={malUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={styles.extIconLink}
+                                        title="MyAnimeList"
+                                        aria-label="Search on MyAnimeList"
+                                    >
+                                        <MalLogo height={21} />
+                                    </a>
+                                )}
+
+                                {isAnime && (
+                                    <a
+                                        href={anilistUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`${styles.extIconLink} ${styles.extAnilistIcon}`}
+                                        title="AniList"
+                                        aria-label="Search on AniList"
+                                    >
+                                        <AnilistLogo height={21} />
+                                    </a>
+                                )}
+
+                                <a
+                                    href={tmdbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={styles.extIconLink}
+                                    title="The Movie Database"
+                                    aria-label="View on TMDB"
+                                >
+                                    <TmdbLogo height={21} />
+                                </a>
+                            </div>
+                        </div>
+
                         {item.overview && (
                             <p className={styles.overview}>{item.overview}</p>
                         )}
@@ -149,8 +209,8 @@ export default function PublicMediaModal({ item, onClose }: Props) {
                                 <ExternalLink size={14} />
                                 Find where to watch
                             </a>
-                            <Link href="/signup" className={styles.signupBtn}>
-                                Sign up to track this →
+                            <Link href="/login" className={styles.signupBtn}>
+                                Sign in to track this →
                             </Link>
                         </div>
                     </div>

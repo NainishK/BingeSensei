@@ -1,0 +1,963 @@
+.showcaseWrapper {
+    width: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Full-Bleed Edge-to-Edge Cinematic Hero Showcase (Matches Explore Page) */
+.heroShowcase {
+    position: relative;
+    overflow: hidden;
+    height: 85vh;
+    min-height: 580px;
+    max-height: 920px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #0F1117;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y;
+}
+
+.heroShowcase * {
+    -webkit-user-drag: none;
+}
+
+.heroShowcaseDragging {
+    cursor: grabbing !important;
+}
+
+.heroShowcase button,
+.heroShowcase input,
+.heroShowcase a {
+    cursor: pointer;
+    user-select: auto;
+}
+
+/* Continuous 3-Slide Carousel Track */
+.heroSliderTrack {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    overflow: visible;
+    pointer-events: none;
+    will-change: transform, opacity;
+    transition: opacity 0.24s ease;
+}
+
+.heroSliderTrackLoading {
+    opacity: 0.45;
+}
+
+.heroSlide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.heroSlidePrev {
+    left: -100%;
+}
+
+.heroSlideCurr {
+    left: 0;
+}
+
+.heroSlideNext {
+    left: 100%;
+}
+
+.heroBackdropWrapper {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.heroBackdropImg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    pointer-events: none;
+}
+
+.heroBackdropFallback {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #181b2a 0%, #0F1117 100%);
+}
+
+/* Top readability scrim for transparent floating navbar */
+.heroBackdropScrimTop {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(15, 17, 23, 0.85) 0%, rgba(15, 17, 23, 0.35) 18%, transparent 36%);
+    pointer-events: none;
+}
+
+.heroBackdropScrimLeft {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(15, 17, 23, 0.96) 0%,
+        rgba(15, 17, 23, 0.82) 34%,
+        rgba(15, 17, 23, 0.25) 62%,
+        transparent 82%
+    );
+    pointer-events: none;
+}
+
+.heroBackdropScrimBottom {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        0deg,
+        #0F1117 0%,
+        #0F1117 4%,
+        rgba(15, 17, 23, 0.94) 14%,
+        rgba(15, 17, 23, 0.62) 28%,
+        rgba(15, 17, 23, 0.22) 48%,
+        transparent 72%
+    );
+    pointer-events: none;
+}
+
+/* Top Bar inside Showcase: Sliding Genre Pills Left, Animated Search Right */
+.heroTopBar {
+    position: relative;
+    z-index: 25;
+    padding: 5.5rem 3.5rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.heroTopBarLeft {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.heroTopBarRight {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Sliding Genre Filter Pills */
+.genreBar {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: rgba(13, 17, 28, 0.56);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.genreBar::-webkit-scrollbar {
+    display: none;
+}
+
+.genreIndicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 0;
+    box-sizing: border-box;
+    background: rgba(99, 102, 241, 0.28);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
+    transition:
+        transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+        width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+        height 0.2s ease,
+        opacity 0.18s ease;
+    will-change: transform, width;
+}
+
+.genreLoadingBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: rgba(13, 17, 28, 0.56);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #c084fc;
+    flex-shrink: 0;
+}
+
+.genrePill {
+    position: relative;
+    z-index: 1;
+    padding: 0.44rem 0.88rem;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.76);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.genrePill:hover:not(.genrePillActive) {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.genrePillActive {
+    color: #ffffff;
+}
+
+/* Animated Expandable Hero Search (Matches InlineMediaSearch) */
+.heroSearchWrapper {
+    position: relative;
+    z-index: 35;
+}
+
+.heroSearchTriggerBtn {
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: rgba(13, 17, 28, 0.56);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    animation: triggerFadeIn 0.2s ease-out;
+}
+
+.heroSearchTriggerBtn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.heroSearchActiveBox {
+    position: relative;
+    width: 480px;
+    max-width: calc(100vw - 3rem);
+    transform-origin: right center;
+    animation: searchBoxExpand 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes triggerFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes searchBoxExpand {
+    0% {
+        opacity: 0;
+        transform: scaleX(0.55) translateY(-2px);
+    }
+    100% {
+        opacity: 1;
+        transform: scaleX(1) translateY(0);
+    }
+}
+
+.heroSearchInputContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 12px;
+    background: rgba(15, 20, 32, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.heroSearchInputIcon {
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.heroSearchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 0.88rem;
+    font-weight: 500;
+    min-width: 0;
+}
+
+.heroSearchInput::placeholder {
+    color: #64748b;
+}
+
+.heroSearchIconBtn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.heroSearchIconBtn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.heroSearchDropdownPanel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 100%;
+    background: rgba(15, 20, 32, 0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+    padding: 10px;
+    box-sizing: border-box;
+    z-index: 60;
+    max-height: 360px;
+    overflow-y: auto;
+    animation: dropdownFade 0.16s ease-out;
+}
+
+@keyframes dropdownFade {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.searchStateRow {
+    padding: 12px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.84rem;
+}
+
+.searchResultRow {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.searchResultRow:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.searchThumb {
+    width: 40px;
+    height: 58px;
+    border-radius: 7px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.searchThumbFallback {
+    width: 40px;
+    height: 58px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.searchResultInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.searchResultTitle {
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.searchResultMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.76rem;
+    color: #94a3b8;
+}
+
+.searchResultRating {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+.searchResultProviders {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.searchResultProvLogo {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    object-fit: cover;
+}
+
+/* Slide Content (Matches Explore heroContent) */
+.heroContent {
+    position: relative;
+    z-index: 3;
+    padding: 0 3.5rem 5rem;
+    max-width: 720px;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    pointer-events: auto;
+}
+
+.heroBadgesRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.heroRankBadge {
+    background: rgba(239, 68, 68, 0.22);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(12px);
+}
+
+.heroRankIcon {
+    color: #ef4444;
+}
+
+.heroRatingBadge {
+    background: rgba(245, 158, 11, 0.22);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fde047;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    backdrop-filter: blur(12px);
+}
+
+.heroMetaBadge {
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #e2e8f0;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    backdrop-filter: blur(12px);
+}
+
+.heroServiceBadge {
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(167, 139, 250, 0.35);
+    color: #ffffff;
+    border-radius: 9999px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    backdrop-filter: blur(12px);
+}
+
+.heroProviderLogo {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.heroExtraProviders {
+    color: #c4b5fd;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.heroTitle {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.65);
+}
+
+.heroOverview {
+    font-size: 0.94rem;
+    color: #cbd5e1;
+    line-height: 1.55;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Primary & Secondary CTA Buttons with Explore Tactile Effects */
+.heroActionsRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.heroBtnPrimary {
+    height: 44px;
+    padding: 0 1.3rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    background: #ffffff;
+    color: #090a10;
+    border: none;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transition:
+        transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color 0.2s ease,
+        box-shadow 0.22s ease;
+}
+
+.heroBtnPrimary:hover {
+    background: #eef2ff;
+    transform: translateY(-2px) scale(1.015);
+    box-shadow: 0 10px 26px rgba(139, 92, 246, 0.35);
+}
+
+.heroBtnPrimary:active {
+    transform: scale(0.97);
+}
+
+.heroBtnArrow {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.heroBtnPrimary:hover .heroBtnArrow {
+    transform: translateX(3px);
+}
+
+.heroBtnSecondary {
+    height: 44px;
+    padding: 0 1.25rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition:
+        transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color 0.2s ease,
+        border-color 0.2s ease;
+}
+
+.heroBtnSecondary:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.45);
+    transform: translateY(-2px);
+}
+
+.heroBtnSecondary:active {
+    transform: scale(0.97);
+}
+
+/* Controls Row */
+.heroControlsRow {
+    position: relative;
+    z-index: 4;
+    padding: 0 3.5rem 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+}
+
+.heroIndicators {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: auto;
+    flex-wrap: wrap;
+}
+
+.heroDash {
+    width: 18px;
+    height: 4px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.25);
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.heroDash:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.heroDashActive {
+    width: 44px;
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.heroDashProgressBar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    background: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+    border-radius: 4px;
+    animation: dashFill 6s linear forwards;
+}
+
+.heroDashPaused {
+    animation-play-state: paused !important;
+}
+
+@keyframes dashFill {
+    from { width: 0%; }
+    to { width: 100%; }
+}
+
+.heroArrows {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.heroArrowBtn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.52);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.heroArrowBtn:hover {
+    background: rgba(255, 255, 255, 0.24);
+    transform: scale(1.1);
+}
+
+/* Loading & Empty States (inside persistent heroShowcase) */
+.heroInitialLoading {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0 3.5rem 4rem;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.025) 25%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0.025) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    box-sizing: border-box;
+}
+
+.skeletonLines {
+    max-width: 540px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.skeletonBarLg {
+    height: 38px;
+    width: 75%;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.skeletonBarSm {
+    height: 16px;
+    width: 95%;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.emptyHero {
+    position: relative;
+    z-index: 5;
+    flex: 1;
+    padding: 2rem 2rem 3rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@media (max-width: 900px) {
+    .heroTopBar,
+    .heroContent,
+    .heroControlsRow,
+    .heroInitialLoading {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .heroShowcase {
+        height: 70vh;
+        min-height: 500px;
+        max-height: 620px;
+    }
+
+    .heroBackdropImg {
+        object-position: center 15%;
+    }
+
+    .heroBackdropScrimLeft {
+        background: linear-gradient(
+            90deg,
+            rgba(15, 17, 23, 0.52) 0%,
+            rgba(15, 17, 23, 0.22) 48%,
+            transparent 82%
+        );
+    }
+
+    .heroBackdropScrimBottom {
+        background: linear-gradient(
+            0deg,
+            #0F1117 0%,
+            #0F1117 6%,
+            rgba(15, 17, 23, 0.92) 32%,
+            rgba(15, 17, 23, 0.5) 56%,
+            transparent 82%
+        );
+    }
+
+    .heroTopBar {
+        padding: 4.15rem 1rem 0;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .genreBar {
+        padding: 3px;
+        gap: 2px;
+        border-radius: 12px;
+    }
+
+    .genreIndicator {
+        border-radius: 9px;
+    }
+
+    .genrePill {
+        padding: 0.34rem 0.64rem;
+        font-size: 0.78rem;
+        border-radius: 9px;
+    }
+
+    .heroSearchLabel {
+        display: none;
+    }
+
+    .heroSearchTriggerBtn {
+        height: 34px;
+        width: 34px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 10px;
+    }
+
+    .heroSearchActiveBox {
+        position: fixed;
+        top: 4.15rem;
+        left: 0.75rem;
+        right: 0.75rem;
+        width: auto;
+        max-width: none;
+        z-index: 100;
+    }
+
+    .heroContent,
+    .heroInitialLoading {
+        padding: 0 1rem 3.5rem;
+        gap: 0.5rem;
+    }
+
+    .heroBadgesRow {
+        gap: 6px;
+    }
+
+    .heroRankBadge,
+    .heroRatingBadge,
+    .heroMetaBadge,
+    .heroServiceBadge {
+        padding: 2px 8px;
+        font-size: 0.7rem;
+    }
+
+    .heroTitle {
+        font-size: 1.5rem;
+        line-height: 1.15;
+    }
+
+    .heroOverview {
+        -webkit-line-clamp: 2;
+        font-size: 0.84rem;
+        line-height: 1.45;
+    }
+
+    .heroActionsRow {
+        gap: 8px;
+        margin-top: 0.2rem;
+        flex-wrap: nowrap;
+    }
+
+    .heroBtnPrimary,
+    .heroBtnSecondary {
+        height: 38px;
+        padding: 0 0.95rem;
+        font-size: 0.82rem;
+        border-radius: 10px;
+        white-space: nowrap;
+    }
+
+    .heroControlsRow {
+        padding: 0 1rem 1rem;
+    }
+
+    .heroArrowBtn {
+        width: 30px;
+        height: 30px;
+    }
+
+    .heroDash {
+        width: 10px;
+    }
+
+    .heroDashActive {
+        width: 24px;
+    }
+}

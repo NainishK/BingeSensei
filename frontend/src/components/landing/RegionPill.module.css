@@ -5,65 +5,79 @@
 .pill {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.8rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    gap: 0.45rem;
+    height: 36px;
+    padding: 0 0.85rem;
+    background: rgba(13, 17, 28, 0.42);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 99px;
-    color: #cbd5e1;
-    font-size: 0.82rem;
-    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.84rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .pill:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: white;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
 }
 
 .caret {
     font-size: 0.65rem;
-    opacity: 0.6;
+    opacity: 0.7;
 }
 
 .dropdown {
     position: absolute;
     top: calc(100% + 8px);
-    left: 0;
-    background: #1e293b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    right: 0;
+    left: auto;
+    background: rgba(13, 17, 28, 0.72);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    padding: 0.35rem;
     overflow-y: auto;
-    max-height: 280px;
-    box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+    max-height: 290px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
     z-index: 100;
-    min-width: 170px;
+    min-width: 195px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
 .option {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
     width: 100%;
     text-align: left;
-    padding: 0.65rem 1rem;
-    color: #cbd5e1;
-    font-size: 0.85rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 9px;
+    color: rgba(226, 232, 240, 0.9);
+    font-size: 0.84rem;
+    font-weight: 500;
+    white-space: nowrap;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s ease, color 0.15s ease;
     background: transparent;
     border: none;
 }
 
 .option:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
+    background: rgba(255, 255, 255, 0.09);
+    color: #ffffff;
 }
 
 .option.active {
-    color: #A78BFA;
-    background: rgba(167, 139, 250, 0.08);
+    color: #e0e7ff;
+    background: rgba(99, 102, 241, 0.24);
 }
 
 .flagLabel {
@@ -71,12 +85,19 @@
 }
 
 @media (max-width: 640px) {
+    .pill {
+        height: 32px;
+        padding: 0 0.65rem;
+    }
+
     .fullLabel {
         display: none;
     }
+
     .flagLabel {
         display: inline;
     }
+
     .dropdown {
         left: auto;
         right: 0;

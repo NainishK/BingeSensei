@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, Wallet, TrendingUp, Sparkles, ChevronRight } from 'lucide-react';
+import { Search, Wallet, Sparkles, ChevronRight, BookmarkCheck, Calendar } from 'lucide-react';
 import FeatureCarousel from '@/components/FeatureCarousel';
 import AppShowcaseStack from '@/components/landing/AppShowcaseStack';
 import AuthRedirect from '@/components/AuthRedirect';
 import RegionPill from '@/components/landing/RegionPill';
-import TrendingShelf from '@/components/landing/TrendingShelf';
-import LandingSearch from '@/components/landing/LandingSearch';
+import LandingTrendingShowcase from '@/components/landing/LandingTrendingShowcase';
 import { PublicMediaItem } from '@/lib/publicTypes';
 import styles from './page.module.css';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+
+const SUPPORTED_COUNTRIES = ['US', 'IN', 'GB', 'CA', 'AU', 'DE', 'FR', 'ES', 'IT', 'NL', 'JP', 'SG', 'PH', 'NZ', 'BR', 'MX'];
 
 const GENRES = [
     { label: 'All', value: '' },
@@ -25,12 +26,52 @@ const GENRES = [
     { label: 'Thriller', value: 'thriller' },
 ];
 
+const HERO_ROTATING_WORDS = [
+    'subscriptions.',
+    'watchlist.',
+    'discoveries.',
+    'calendar.',
+    'progress.',
+];
+
 export default function Home() {
     const [region, setRegion] = useState('US');
     const [regionReady, setRegionReady] = useState(false);
     const [genre, setGenre] = useState('');
     const [trendingItems, setTrendingItems] = useState<PublicMediaItem[]>([]);
     const [trendingLoading, setTrendingLoading] = useState(true);
+    const [wordState, setWordState] = useState<{ index: number; prev: number | null }>({
+        index: 0,
+        prev: null,
+    });
+    const [wordWidth, setWordWidth] = useState<number | undefined>(undefined);
+    const activeWordRef = useRef<HTMLSpanElement | null>(null);
+
+    // Cycle rotating hero focus word cleanly every 2.6s
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setWordState((s) => ({
+                index: (s.index + 1) % HERO_ROTATING_WORDS.length,
+                prev: s.index,
+            }));
+        }, 2600);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Keep rotating word container width smoothly matched to active word
+    useEffect(() => {
+        const updateWidth = () => {
+            if (activeWordRef.current) {
+                setWordWidth(activeWordRef.current.offsetWidth);
+            }
+        };
+        const rafId = requestAnimationFrame(updateWidth);
+        window.addEventListener('resize', updateWidth);
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', updateWidth);
+        };
+    }, [wordState.index]);
 
     // Feature carousel images (unchanged from current landing)
     const discoveryImages = [
@@ -58,8 +99,8 @@ export default function Home() {
         fetch('https://ipinfo.io/json')
             .then(r => r.json())
             .then(data => {
-                const country = data.country || 'US';
-                const supported = ['IN', 'US'].includes(country) ? country : 'US';
+                const country = (data.country || 'US').toUpperCase();
+                const supported = SUPPORTED_COUNTRIES.includes(country) ? country : 'US';
                 setRegion(supported);
                 localStorage.setItem('guest_region', supported);
             })
@@ -67,11 +108,10 @@ export default function Home() {
             .finally(() => setRegionReady(true));
     }, []);
 
-    // Fetch trending when region or genre changes
+    // Fetch trending when region or genre changes (keep existing slides visible while fetching next category)
     useEffect(() => {
         if (!regionReady) return;
         setTrendingLoading(true);
-        setTrendingItems([]);
         const params = new URLSearchParams({ region });
         if (genre) params.set('genre', genre);
         fetch(`${API_BASE}/public/trending?${params}`)
@@ -111,33 +151,67 @@ export default function Home() {
                         priority
                     />
                 </div>
-                <div className={styles.navCenter}>
-                    <RegionPill region={region} onChange={handleRegionChange} />
-                </div>
                 <div className={styles.navLinks}>
+                    <RegionPill region={region} onChange={handleRegionChange} />
                     <Link href="/login" className={styles.navLink}>Log In</Link>
                     <Link href="/signup" className={styles.loginBtn}>Get Started</Link>
                 </div>
             </nav>
 
-            {/* ── Hero ── */}
+            {/* ── Full-Bleed Explore Trending Hero Spotlight (Top of Landing, no login needed) ── */}
+            <LandingTrendingShowcase
+                items={trendingItems}
+                loading={trendingLoading}
+                region={region}
+                genre={genre}
+                genres={GENRES}
+                onGenreChange={setGenre}
+            />
+
+            {/* ── Value Proposition Hero ── */}
             <section className={styles.hero}>
                 <div className={styles.heroContent}>
-                    <span className={styles.badge}>✨ Browse any show, movie, or anime - no account needed</span>
                     <h1 className={styles.title}>
-                        Your subscriptions.<br />
+                        <span className={styles.titleLine}>
+                            <span className={styles.titleStatic}>Your&nbsp;</span>
+                            <span
+                                className={styles.titleRotateSlot}
+                                style={{ width: wordWidth ? `${wordWidth}px` : undefined }}
+                            >
+                                {wordState.prev !== null && (
+                                    <span
+                                        key={`out-${wordState.prev}-${wordState.index}`}
+                                        aria-hidden="true"
+                                        className={`${styles.titleRotateWord} ${styles.titleRotateWordOut}`}
+                                    >
+                                        {HERO_ROTATING_WORDS[wordState.prev]}
+                                    </span>
+                                )}
+                                <span
+                                    key={`in-${wordState.index}`}
+                                    ref={activeWordRef}
+                                    className={`${styles.titleRotateWord} ${
+                                        wordState.prev !== null ? styles.titleRotateWordIn : ''
+                                    }`}
+                                >
+                                    {HERO_ROTATING_WORDS[wordState.index]}
+                                </span>
+                            </span>
+                        </span>
                         <span className={styles.titleHighlight}>One unified dashboard.</span>
                     </h1>
                     <p className={styles.subtitle}>
-                        Stop paying for subscriptions you've forgotten about. One dashboard
-                        to track what you watch, manage what you pay, and discover what's next.
+                        Track your watchlist across every streaming service, explore what&apos;s trending
+                        in your region, follow upcoming release dates, and cut forgotten subscriptions
+                        before they renew.
                     </p>
                     {/* Feature highlights */}
                     <div className={styles.featurePills}>
-                        <span className={styles.featurePill}><Search size={14} /> Instant Search</span>
+                        <span className={styles.featurePill}><BookmarkCheck size={14} /> Unified Watchlist</span>
+                        <span className={styles.featurePill}><Search size={14} /> Explore &amp; Search</span>
+                        <span className={styles.featurePill}><Calendar size={14} /> Release Calendar</span>
+                        <span className={styles.featurePill}><Sparkles size={14} /> Smart Picks</span>
                         <span className={styles.featurePill}><Wallet size={14} /> Kill Waste</span>
-                        <span className={styles.featurePill}><TrendingUp size={14} /> Track Progress</span>
-                        <span className={styles.featurePill}><Sparkles size={14} /> Curated Picks</span>
                     </div>
                     <div className={styles.ctaGroup}>
                         <Link href="/signup" className={styles.primaryBtn}>
@@ -150,7 +224,7 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* ── Visual Showcase (existing, unchanged) ── */}
+            {/* ── Visual Dashboard Preview ── */}
             <section className={styles.visualSection}>
                 <div className={styles.dashboardPreview}>
                     <div className={styles.browserWindow}>
@@ -179,48 +253,13 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* ── Explore Section (no login needed) ── */}
-            <section className={styles.exploreSection}>
-                <div className={styles.exploreInner}>
-                    <div className={styles.exploreHeader}>
-                        <div>
-                            <h2 className={styles.exploreTitle}>Explore What's Trending</h2>
-                            <p className={styles.exploreSubtitle}>
-                                No account needed. Search anything - we'll show you exactly where to watch it.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Search */}
-                    <div className={styles.searchRow}>
-                        <LandingSearch region={region} />
-                    </div>
-
-                    {/* Genre filters */}
-                    <div className={styles.genrePills}>
-                        {GENRES.map(g => (
-                            <button
-                                key={g.value}
-                                className={`${styles.genrePill} ${genre === g.value ? styles.genreActive : ''}`}
-                                onClick={() => setGenre(g.value)}
-                            >
-                                {g.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Trending shelf */}
-                    <TrendingShelf items={trendingItems} loading={trendingLoading} />
-                </div>
-            </section>
-
             {/* ── Join CTA Banner ── */}
             <section className={styles.joinBanner}>
                 <div className={styles.joinInner}>
                     <div className={styles.joinText}>
-                        <h2 className={styles.joinTitle}>Your streaming life, simplified.</h2>
+                        <h2 className={styles.joinTitle}>Your entire streaming life, organized.</h2>
                         <p className={styles.joinSubtitle}>
-                            Sign up to track what you watch, cut what you don't, and discover what to watch next.
+                            Build one watchlist, follow episode &amp; movie drops on your calendar, discover what to watch next, and cut what you don&apos;t watch.
                         </p>
                     </div>
                     <Link href="/signup" className={styles.joinBtn}>
@@ -229,15 +268,16 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* ── Feature Highlights (unchanged) ── */}
+            {/* ── Feature Highlights ── */}
             <section id="features" className={styles.features}>
                 <div className={styles.featureRow}>
                     <div className={styles.featureContent}>
                         <div className={styles.featureIcon}><Search size={32} color="#60a5fa" /></div>
-                        <h3 className={styles.featureTitle}>Find It Instantly.</h3>
+                        <h3 className={styles.featureTitle}>Search, Track &amp; Explore.</h3>
                         <p className={styles.featureDesc}>
-                            Stop juggling apps. Search any show, movie, or anime and instantly see which of your
-                            active subscriptions has it - so you never pay for a rental you already own.
+                            Search any show, movie, or anime across your region, save everything into
+                            one watchlist, log episode progress and ratings, and explore trending hits
+                            available on services you already own.
                         </p>
                     </div>
                     <div className={styles.featureVisual}>
@@ -248,10 +288,11 @@ export default function Home() {
                 <div className={`${styles.featureRow} ${styles.reversed}`}>
                     <div className={styles.featureContent}>
                         <div className={styles.featureIcon}><Sparkles size={32} color="#c084fc" /></div>
-                        <h3 className={styles.featureTitle}>Your Next Obsession, Curated.</h3>
+                        <h3 className={styles.featureTitle}>Curated For Your Taste.</h3>
                         <p className={styles.featureDesc}>
-                            Find your next binge based on what you've already loved - surfaced from the
-                            services you already pay for. No rabbit holes, no wasted time.
+                            Discover what to watch next based on the titles you&apos;ve loved and services
+                            you already pay for, plus clear insights into which subscriptions actually
+                            deliver value each month.
                         </p>
                     </div>
                     <div className={styles.featureVisual}>
@@ -262,10 +303,10 @@ export default function Home() {
                 <div className={styles.featureRow}>
                     <div className={styles.featureContent}>
                         <div className={styles.featureIcon}><Wallet size={32} color="#34d399" /></div>
-                        <h3 className={styles.featureTitle}>Waste Killer.</h3>
+                        <h3 className={styles.featureTitle}>Zero Waste. Never Miss a Drop.</h3>
                         <p className={styles.featureDesc}>
-                            Spot the subscriptions you've forgotten about. See exactly where your money
-                            is going - and cut what you're not watching.
+                            Monitor monthly spend, renewal alerts, and service utilization at a glance,
+                            while tracking upcoming theatrical and streaming drops on your personal release calendar.
                         </p>
                     </div>
                     <div className={styles.featureVisual}>
@@ -286,7 +327,6 @@ export default function Home() {
                     <div className={styles.footerLinks}>
                         <Link href="/privacy" className={styles.footerLink}>Privacy Policy</Link>
                         <Link href="/terms" className={styles.footerLink}>Terms of Service</Link>
-                        <Link href="/login" className={styles.footerLink}>Sign In</Link>
                     </div>
                 </div>
             </footer>
