@@ -652,13 +652,15 @@
     background: rgba(0, 0, 0, 0.08);
 }
 
-.searchStatusMenuItemDelete {
-    color: #ef4444;
+.searchStatusMenuItemDelete,
+:global([data-theme='light']) .searchStatusMenuItemDelete {
+    color: #ef4444 !important;
 }
 
-.searchStatusMenuItemDelete:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
+.searchStatusMenuItemDelete:hover,
+:global([data-theme='light']) .searchStatusMenuItemDelete:hover {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
 }
 
 /* Rating Menu */

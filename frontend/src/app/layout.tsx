@@ -178,7 +178,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
-        <ThemeProvider defaultTheme="system" storageKey="bingesensei-theme">
+        <ThemeProvider defaultTheme="dark" storageKey="bingesensei-theme">
           <GoogleAnalytics />
           <MicrosoftClarity />
           {children}

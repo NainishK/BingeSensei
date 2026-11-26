@@ -1,0 +1,97 @@
+.toggleBtn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.toggleBtnCollapsed {
+    justify-content: center;
+}
+
+.leftGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.leftGroupDefault {
+    gap: 0.8rem;
+}
+
+.iconBox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+}
+
+.iconBoxDefault {
+    min-width: 24px;
+}
+
+.labelCompact {
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.labelDefault {
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.switchTrack {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    transition: background 0.28s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.28s ease, box-shadow 0.28s ease;
+}
+
+.switchTrackLight {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.switchTrackDark {
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+
+.switchThumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: translateX(0);
+    color: #f59e0b;
+}
+
+.switchTrackDark .switchThumb {
+    transform: translateX(20px);
+    color: #4f46e5;
+}

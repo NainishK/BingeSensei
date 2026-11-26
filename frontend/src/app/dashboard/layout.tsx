@@ -15,7 +15,7 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const [country, setCountry] = useState<string | null>(null);
 
     const { theme } = useTheme();
@@ -27,12 +27,7 @@ export default function DashboardLayout({
     }, []);
 
     useEffect(() => {
-        if (theme === 'system') {
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            setActiveTheme(isDark ? 'dark' : 'light');
-        } else {
-            setActiveTheme(theme as 'light' | 'dark');
-        }
+        setActiveTheme(theme === 'light' ? 'light' : 'dark');
     }, [theme]);
 
     useEffect(() => {
@@ -47,12 +42,21 @@ export default function DashboardLayout({
         };
         fetchCountry();
 
-        // Auto-collapse on mobile
+        const getSavedDesktopCollapsed = () => {
+            try {
+                const saved = localStorage.getItem('sidebar_collapsed');
+                return saved === null ? true : saved === 'true';
+            } catch {
+                return true;
+            }
+        };
+
+        // Auto-collapse on mobile; restore saved desktop preference (default collapsed)
         const handleResize = () => {
             if (window.innerWidth < 768) {
                 setIsCollapsed(true);
             } else {
-                setIsCollapsed(false);
+                setIsCollapsed(getSavedDesktopCollapsed());
             }
         };
 
@@ -62,6 +66,18 @@ export default function DashboardLayout({
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    const handleToggleSidebar = () => {
+        setIsCollapsed((prev) => {
+            const next = !prev;
+            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                try {
+                    localStorage.setItem('sidebar_collapsed', String(next));
+                } catch {}
+            }
+            return next;
+        });
+    };
 
     const getFlag = (code: string) => {
         const flags: Record<string, string> = {
@@ -77,7 +93,7 @@ export default function DashboardLayout({
                 <div className={styles.mobileLeft}>
                     <button
                         className={styles.mobileMenuBtn}
-                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        onClick={handleToggleSidebar}
                     >
                         <Menu size={24} />
                     </button>
@@ -97,7 +113,7 @@ export default function DashboardLayout({
 
             <Sidebar
                 isCollapsed={isCollapsed}
-                toggle={() => setIsCollapsed(!isCollapsed)}
+                toggle={handleToggleSidebar}
                 className={isCollapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}
                 countryCode={country}
             />

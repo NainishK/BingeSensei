@@ -473,16 +473,47 @@ export default function RecommendationsPage() {
     const [dragStartX, setDragStartX] = useState<number | null>(null);
     const [dragCurrentX, setDragCurrentX] = useState<number | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isAnimating, setIsAnimating] = useState(false);
+    const [animatingTarget, setAnimatingTarget] = useState<'next' | 'prev' | 'reset' | null>(null);
+
+    const handleNextSlide = () => {
+        if (isAnimating || filteredTrendingRecs.length <= 1) return;
+        setIsAnimating(true);
+        setAnimatingTarget('next');
+        setTimeout(() => {
+            setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
+            setIsAnimating(false);
+            setAnimatingTarget(null);
+            setIsDragging(false);
+            setDragStartX(null);
+            setDragCurrentX(null);
+        }, 320);
+    };
+
+    const handlePrevSlide = () => {
+        if (isAnimating || filteredTrendingRecs.length <= 1) return;
+        setIsAnimating(true);
+        setAnimatingTarget('prev');
+        setTimeout(() => {
+            setHeroIndex((prev) => (prev - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length);
+            setIsAnimating(false);
+            setAnimatingTarget(null);
+            setIsDragging(false);
+            setDragStartX(null);
+            setDragCurrentX(null);
+        }, 320);
+    };
 
     useEffect(() => {
-        if (isHeroHovered || isDragging || filteredTrendingRecs.length <= 1) return;
+        if (isHeroHovered || isDragging || isAnimating || filteredTrendingRecs.length <= 1) return;
         const interval = setInterval(() => {
-            setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
+            handleNextSlide();
         }, 6000);
         return () => clearInterval(interval);
-    }, [isHeroHovered, isDragging, filteredTrendingRecs.length]);
+    }, [isHeroHovered, isDragging, isAnimating, filteredTrendingRecs.length]);
 
     const handleHeroPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (isAnimating) return;
         if (e.button !== 0 && e.pointerType === 'mouse') return;
         const target = e.target as HTMLElement;
         if (target && target.closest('button, input, a, select, [role="button"], [data-interactive="true"]')) {
@@ -500,32 +531,39 @@ export default function RecommendationsPage() {
     };
 
     const handleHeroPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isDragging || dragStartX === null) return;
+        if (!isDragging || dragStartX === null || isAnimating) return;
         setDragCurrentX(e.clientX);
     };
 
     const handleHeroPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isDragging || dragStartX === null || dragCurrentX === null) {
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {}
+
+        if (!isDragging || dragStartX === null || dragCurrentX === null || isAnimating) {
             setIsDragging(false);
             setDragStartX(null);
             setDragCurrentX(null);
             return;
         }
+
         const diff = dragCurrentX - dragStartX;
-        const threshold = 35;
-        if (diff < -threshold && filteredTrendingRecs.length > 1) {
-            // Dragged left: go to next item
-            setHeroIndex((prev) => (prev + 1) % filteredTrendingRecs.length);
-        } else if (diff > threshold && filteredTrendingRecs.length > 1) {
-            // Dragged right: go to prev item
-            setHeroIndex((prev) => (prev - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length);
-        }
+        const threshold = 70;
         setIsDragging(false);
-        setDragStartX(null);
-        setDragCurrentX(null);
-        try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-        } catch {}
+        if (diff < -threshold && filteredTrendingRecs.length > 1) {
+            handleNextSlide();
+        } else if (diff > threshold && filteredTrendingRecs.length > 1) {
+            handlePrevSlide();
+        } else {
+            setIsAnimating(true);
+            setAnimatingTarget('reset');
+            setTimeout(() => {
+                setIsAnimating(false);
+                setAnimatingTarget(null);
+                setDragStartX(null);
+                setDragCurrentX(null);
+            }, 250);
+        }
     };
 
     const handleHeroStatusSelect = async (rec: Recommendation, targetStatus: string, existingId?: number) => {
@@ -591,15 +629,175 @@ export default function RecommendationsPage() {
             {trendingRecs.length > 0 && (() => {
                 const safeHeroIndex = filteredTrendingRecs.length > 0 ? heroIndex % filteredTrendingRecs.length : 0;
                 const currentHero = filteredTrendingRecs[safeHeroIndex];
-                const existingHeroItem = currentHero ? watchlist.find(w => w.tmdb_id === currentHero.tmdb_id) : undefined;
-                const releaseYear = currentHero?.release_date ? currentHero.release_date.split('-')[0] : '';
-                const heroBackdrop = currentHero?.backdrop_path
-                    ? `https://image.tmdb.org/t/p/w1280${currentHero.backdrop_path}`
-                    : (currentHero?.poster_path ? `https://image.tmdb.org/t/p/w1280${currentHero.poster_path}` : '');
+                const hasMultiple = filteredTrendingRecs.length > 1;
+
+                const prevHeroIndex = hasMultiple
+                    ? (safeHeroIndex - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length
+                    : safeHeroIndex;
+                const nextHeroIndex = hasMultiple
+                    ? (safeHeroIndex + 1) % filteredTrendingRecs.length
+                    : safeHeroIndex;
+
+                const prevHeroRec = hasMultiple ? filteredTrendingRecs[prevHeroIndex] : null;
+                const nextHeroRec = hasMultiple ? filteredTrendingRecs[nextHeroIndex] : null;
 
                 const dragOffset = isDragging && dragStartX !== null && dragCurrentX !== null
-                    ? Math.max(-120, Math.min(120, dragCurrentX - dragStartX))
+                    ? dragCurrentX - dragStartX
                     : 0;
+
+                let trackTransform = 'translateX(0px)';
+                let trackTransition = 'none';
+
+                if (isDragging && !isAnimating) {
+                    trackTransform = `translateX(${dragOffset}px)`;
+                    trackTransition = 'none';
+                } else if (isAnimating) {
+                    if (animatingTarget === 'next') {
+                        trackTransform = 'translateX(-100%)';
+                        trackTransition = 'transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)';
+                    } else if (animatingTarget === 'prev') {
+                        trackTransform = 'translateX(100%)';
+                        trackTransition = 'transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)';
+                    } else if (animatingTarget === 'reset') {
+                        trackTransform = 'translateX(0px)';
+                        trackTransition = 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)';
+                    }
+                }
+
+                const renderHeroSlide = (
+                    rec: Recommendation | null,
+                    slideIdx: number,
+                    isCurrent: boolean,
+                    positionClass: string
+                ) => {
+                    if (!rec) return null;
+                    const existingItem = watchlist.find(w => w.tmdb_id === rec.tmdb_id);
+                    const year = rec.release_date ? rec.release_date.split('-')[0] : '';
+                    const backdrop = rec.backdrop_path
+                        ? `https://image.tmdb.org/t/p/w1280${rec.backdrop_path}`
+                        : (rec.poster_path ? `https://image.tmdb.org/t/p/w1280${rec.poster_path}` : '');
+
+                    return (
+                        <div key={`${rec.tmdb_id || rec.items[0]}-${positionClass}`} className={`${styles.heroSlide} ${positionClass}`}>
+                            <div className={styles.heroBackdropWrapper}>
+                                {backdrop ? (
+                                    <img
+                                        src={backdrop}
+                                        alt={rec.items[0] || 'Featured'}
+                                        className={styles.heroBackdropImg}
+                                        draggable={false}
+                                        onDragStart={(e) => e.preventDefault()}
+                                    />
+                                ) : (
+                                    <div className={styles.heroBackdropFallback} />
+                                )}
+                                <div className={styles.heroBackdropScrimLeft} />
+                                <div className={styles.heroBackdropScrimBottom} />
+                            </div>
+
+                            <div
+                                className={styles.heroContent}
+                                style={{ pointerEvents: isCurrent ? 'auto' : 'none' }}
+                            >
+                                <div className={styles.heroBadgesRow}>
+                                    <span className={styles.heroRankBadge}>
+                                        <Flame size={13} className={styles.heroRankIcon} />
+                                        #{slideIdx + 1} Trending
+                                    </span>
+                                    {rec.vote_average ? (
+                                        <span className={styles.heroRatingBadge}>
+                                            <Star size={13} fill="#fbbf24" stroke="none" />
+                                            {rec.vote_average.toFixed(1)}
+                                        </span>
+                                    ) : null}
+                                    <span className={styles.heroMetaBadge}>
+                                        {rec.media_type === 'tv' ? 'TV Series' : 'Movie'}
+                                        {year ? ` · ${year}` : ''}
+                                    </span>
+                                    {rec.service_name && (() => {
+                                        const isPopular = rec.service_name.toLowerCase().includes('popular');
+                                        return (
+                                            <span className={styles.heroServiceBadge}>
+                                                {isPopular ? (
+                                                    <TrendingUp size={13} style={{ color: '#ec4899', flexShrink: 0 }} />
+                                                ) : (
+                                                    <ServiceIcon name={rec.service_name} style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0 }} />
+                                                )}
+                                                <span>{rec.service_name}</span>
+                                            </span>
+                                        );
+                                    })()}
+                                </div>
+
+                                <h2 className={styles.heroTitle}>{rec.items[0]}</h2>
+
+                                <p className={styles.heroOverview}>{rec.overview || 'Popular content trending across major streaming networks.'}</p>
+
+                                <div className={styles.heroActionsRow}>
+                                    <div className={styles.heroStatusDropdownContainer} ref={isCurrent ? heroStatusRef : undefined}>
+                                        <button
+                                            type="button"
+                                            className={existingItem ? styles.heroBtnInWatchlist : styles.heroBtnPrimary}
+                                            onClick={() => {
+                                                if (isCurrent) setHeroStatusDropdownOpen(!heroStatusDropdownOpen);
+                                            }}
+                                            disabled={heroAdding}
+                                        >
+                                            {heroAdding && isCurrent ? (
+                                                <Loader2 size={16} className={styles.spinIcon} />
+                                            ) : existingItem ? (
+                                                <>
+                                                    <Check size={16} className={styles.heroBtnIcon} />
+                                                    <span className={styles.heroBtnText}>{STATUS_COLORS[existingItem.status]?.label || 'In Watchlist'}</span>
+                                                    <ChevronDown size={14} className={`${styles.heroBtnChevron} ${isCurrent && heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus size={16} className={styles.heroBtnIcon} />
+                                                    <span className={styles.heroBtnText}>Add to Watchlist</span>
+                                                    <ChevronDown size={14} className={`${styles.heroBtnChevron} ${isCurrent && heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
+                                                </>
+                                            )}
+                                        </button>
+
+                                        {isCurrent && heroStatusDropdownOpen && (
+                                            <div className={styles.heroStatusMenu}>
+                                                {Object.entries(STATUS_COLORS).map(([statusKey, config]) => {
+                                                    const IconComponent = config.icon;
+                                                    const isItemCurrent = existingItem?.status === statusKey;
+                                                    return (
+                                                        <button
+                                                            key={statusKey}
+                                                            type="button"
+                                                            className={`${styles.heroStatusMenuItem} ${isItemCurrent ? styles.heroStatusMenuItemActive : ''}`}
+                                                            onClick={async () => {
+                                                                setHeroStatusDropdownOpen(false);
+                                                                await handleHeroStatusSelect(rec, statusKey, existingItem?.id);
+                                                            }}
+                                                        >
+                                                            <IconComponent size={15} style={{ color: config.color, flexShrink: 0 }} />
+                                                            <span>{config.label}</span>
+                                                            {isItemCurrent && <Check size={14} style={{ marginLeft: 'auto', color: '#10b981' }} />}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className={styles.heroBtnSecondary}
+                                        onClick={() => handleHeroMoreInfo(rec, existingItem)}
+                                    >
+                                        <Info size={16} />
+                                        <span>More Info</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                };
 
                 return (
                     <div
@@ -612,26 +810,21 @@ export default function RecommendationsPage() {
                         onPointerCancel={handleHeroPointerUp}
                         onDragStart={(e) => e.preventDefault()}
                     >
+                        {/* Continuous 3-Slide Track */}
                         <div
-                            className={styles.heroBackdropWrapper}
+                            className={styles.heroSliderTrack}
                             style={{
-                                transform: dragOffset ? `translateX(${dragOffset * 0.4}px)` : undefined,
-                                transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                                transform: trackTransform,
+                                transition: trackTransition
                             }}
                         >
-                            {heroBackdrop ? (
-                                <img
-                                    src={heroBackdrop}
-                                    alt={currentHero?.items[0] || 'Featured'}
-                                    className={styles.heroBackdropImg}
-                                    draggable={false}
-                                    onDragStart={(e) => e.preventDefault()}
-                                />
-                            ) : (
-                                <div className={styles.heroBackdropFallback} />
+                            {hasMultiple && prevHeroRec && renderHeroSlide(prevHeroRec, prevHeroIndex, false, styles.heroSlidePrev)}
+                            {currentHero ? renderHeroSlide(currentHero, safeHeroIndex, true, styles.heroSlideCurr) : (
+                                <div className={styles.emptyHeroState}>
+                                    <p>No trending content available for this filter.</p>
+                                </div>
                             )}
-                            <div className={styles.heroBackdropScrimLeft} />
-                            <div className={styles.heroBackdropScrimBottom} />
+                            {hasMultiple && nextHeroRec && renderHeroSlide(nextHeroRec, nextHeroIndex, false, styles.heroSlideNext)}
                         </div>
 
                         {/* Top Bar inside Hero: Filter Pills on Left, Separated Search Control on Right */}
@@ -1013,115 +1206,6 @@ export default function RecommendationsPage() {
                             </div>
                         </div>
 
-                        {currentHero ? (
-
-                                <div
-                                    className={styles.heroContent}
-                                    style={{
-                                        transform: dragOffset ? `translateX(${dragOffset * 0.55}px)` : undefined,
-                                        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
-                                    }}
-                                >
-                                    <div className={styles.heroBadgesRow}>
-                                        <span className={styles.heroRankBadge}>
-                                            <Flame size={13} className={styles.heroRankIcon} />
-                                            #{safeHeroIndex + 1} Trending
-                                        </span>
-                                        {currentHero.vote_average ? (
-                                            <span className={styles.heroRatingBadge}>
-                                                <Star size={13} fill="#fbbf24" stroke="none" />
-                                                {currentHero.vote_average.toFixed(1)}
-                                            </span>
-                                        ) : null}
-                                        <span className={styles.heroMetaBadge}>
-                                            {currentHero.media_type === 'tv' ? 'TV Series' : 'Movie'}
-                                            {releaseYear ? ` · ${releaseYear}` : ''}
-                                        </span>
-                                        {currentHero.service_name && (() => {
-                                            const isPopular = currentHero.service_name.toLowerCase().includes('popular');
-                                            return (
-                                                <span className={styles.heroServiceBadge}>
-                                                    {isPopular ? (
-                                                        <TrendingUp size={13} style={{ color: '#ec4899', flexShrink: 0 }} />
-                                                    ) : (
-                                                        <ServiceIcon name={currentHero.service_name} style={{ width: 14, height: 14, borderRadius: 3, flexShrink: 0 }} />
-                                                    )}
-                                                    <span>{currentHero.service_name}</span>
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    <h2 className={styles.heroTitle}>{currentHero.items[0]}</h2>
-
-                                    <p className={styles.heroOverview}>{currentHero.overview || 'Popular content trending across major streaming networks.'}</p>
-
-                                    <div className={styles.heroActionsRow}>
-                                        <div className={styles.heroStatusDropdownContainer} ref={heroStatusRef}>
-                                            <button
-                                                type="button"
-                                                className={existingHeroItem ? styles.heroBtnInWatchlist : styles.heroBtnPrimary}
-                                                onClick={() => setHeroStatusDropdownOpen(!heroStatusDropdownOpen)}
-                                                disabled={heroAdding}
-                                            >
-                                                {heroAdding ? (
-                                                    <Loader2 size={16} className={styles.spinIcon} />
-                                                ) : existingHeroItem ? (
-                                                    <>
-                                                        <Check size={16} className={styles.heroBtnIcon} />
-                                                        <span className={styles.heroBtnText}>{STATUS_COLORS[existingHeroItem.status]?.label || 'In Watchlist'}</span>
-                                                        <ChevronDown size={14} className={`${styles.heroBtnChevron} ${heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Plus size={16} className={styles.heroBtnIcon} />
-                                                        <span className={styles.heroBtnText}>Add to Watchlist</span>
-                                                        <ChevronDown size={14} className={`${styles.heroBtnChevron} ${heroStatusDropdownOpen ? styles.rotateChevron : ''}`} />
-                                                    </>
-                                                )}
-                                            </button>
-
-                                            {heroStatusDropdownOpen && (
-                                                <div className={styles.heroStatusMenu}>
-                                                    {Object.entries(STATUS_COLORS).map(([statusKey, config]) => {
-                                                        const IconComponent = config.icon;
-                                                        const isCurrent = existingHeroItem?.status === statusKey;
-                                                        return (
-                                                            <button
-                                                                key={statusKey}
-                                                                type="button"
-                                                                className={`${styles.heroStatusMenuItem} ${isCurrent ? styles.heroStatusMenuItemActive : ''}`}
-                                                                onClick={async () => {
-                                                                    setHeroStatusDropdownOpen(false);
-                                                                    await handleHeroStatusSelect(currentHero, statusKey, existingHeroItem?.id);
-                                                                }}
-                                                            >
-                                                                <IconComponent size={15} style={{ color: config.color, flexShrink: 0 }} />
-                                                                <span>{config.label}</span>
-                                                                {isCurrent && <Check size={14} style={{ marginLeft: 'auto', color: '#10b981' }} />}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className={styles.heroBtnSecondary}
-                                            onClick={() => handleHeroMoreInfo(currentHero, existingHeroItem)}
-                                        >
-                                            <Info size={16} />
-                                            <span>More Info</span>
-                                        </button>
-                                    </div>
-                                </div>
-                        ) : (
-                            <div className={styles.emptyHeroState}>
-                                <p>No trending content available for this filter.</p>
-                            </div>
-                        )}
-
                         <div className={styles.heroControlsRow} data-interactive="true">
                             <div className={styles.heroIndicators}>
                                 {filteredTrendingRecs.map((_, idx) => {
@@ -1132,7 +1216,9 @@ export default function RecommendationsPage() {
                                             type="button"
                                             aria-label={`Slide ${idx + 1}`}
                                             className={`${styles.heroDash} ${isActive ? styles.heroDashActive : ''}`}
-                                            onClick={() => setHeroIndex(idx)}
+                                            onClick={() => {
+                                                if (!isAnimating) setHeroIndex(idx);
+                                            }}
                                         >
                                             {isActive && (
                                                 <span
@@ -1150,7 +1236,7 @@ export default function RecommendationsPage() {
                                     type="button"
                                     aria-label="Previous slide"
                                     className={styles.heroArrowBtn}
-                                    onClick={() => setHeroIndex((safeHeroIndex - 1 + filteredTrendingRecs.length) % filteredTrendingRecs.length)}
+                                    onClick={handlePrevSlide}
                                 >
                                     <ChevronLeft size={18} />
                                 </button>
@@ -1158,7 +1244,7 @@ export default function RecommendationsPage() {
                                     type="button"
                                     aria-label="Next slide"
                                     className={styles.heroArrowBtn}
-                                    onClick={() => setHeroIndex((safeHeroIndex + 1) % filteredTrendingRecs.length)}
+                                    onClick={handleNextSlide}
                                 >
                                     <ChevronRight size={18} />
                                 </button>

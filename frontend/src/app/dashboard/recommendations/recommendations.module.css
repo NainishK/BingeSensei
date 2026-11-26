@@ -164,30 +164,34 @@
 .filterPills {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
+    gap: 4px;
+    background: rgba(13, 17, 28, 0.52);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     border-radius: 14px;
     padding: 4px;
     flex-wrap: wrap;
     margin-bottom: 1.25rem;
 }
 
-:global([data-theme='dark']) .filterPills {
-    background: rgba(255, 255, 255, 0.02);
-    border-color: rgba(255, 255, 255, 0.08);
+:global([data-theme='light']) .filterPills {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .filterPill {
     background: transparent;
-    color: var(--muted-foreground);
+    color: rgba(255, 255, 255, 0.82);
     border: 1px solid transparent;
     border-radius: 10px;
     padding: 0.45rem 0.85rem;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -196,9 +200,19 @@
     white-space: nowrap;
 }
 
+:global([data-theme='light']) .filterPill {
+    color: #1e293b;
+    font-weight: 600;
+}
+
 .filterPill:hover:not(.filterPillActive) {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+:global([data-theme='light']) .filterPill:hover:not(.filterPillActive) {
+    background: rgba(0, 0, 0, 0.05);
+    color: #0f172a;
 }
 
 .filterPill:active {
@@ -206,16 +220,17 @@
 }
 
 .filterPillActive {
-    background: var(--card);
-    color: var(--foreground) !important;
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    background: rgba(99, 102, 241, 0.22) !important;
+    border: 1px solid rgba(129, 140, 248, 0.45) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
-:global([data-theme='dark']) .filterPillActive {
-    background: #181b2a;
-    border-color: rgba(99, 102, 241, 0.45);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+:global([data-theme='light']) .filterPillActive {
+    background: #6366f1 !important;
+    border-color: #6366f1 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 /* ── Colored Icon Accents (Consistent with Profile) ── */
@@ -290,20 +305,26 @@
     font-size: 0.74rem;
     font-weight: 700;
     padding: 1px 7px;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--muted-foreground);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.2;
     transition: all 0.2s ease;
 }
 
-.filterPillActive .pillCount {
-    background: rgba(99, 102, 241, 0.15);
-    color: #818cf8;
+:global([data-theme='light']) .pillCount {
+    background: rgba(0, 0, 0, 0.08);
+    color: #334155;
 }
 
-:global([data-theme='dark']) .filterPillActive .pillCount {
-    background: rgba(99, 102, 241, 0.22);
-    color: #a5b4fc;
+.filterPillActive .pillCount {
+    background: rgba(129, 140, 248, 0.25);
+    color: #c7d2fe;
+}
+
+:global([data-theme='light']) .filterPillActive .pillCount {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
 }
 
 /* Cinematic Top Hero Showcase (Full Bleed Netflix / Animex Style) */
@@ -351,6 +372,59 @@
         height: 65vh;
         min-height: 440px;
         margin-bottom: 1.5rem;
+    }
+}
+
+/* Continuous 3-Slide Carousel Track */
+.heroSliderTrack {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    overflow: visible;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.heroSlide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.heroSlidePrev {
+    left: -100%;
+}
+
+.heroSlideCurr {
+    left: 0;
+}
+
+.heroSlideNext {
+    left: 100%;
+}
+
+.heroSlide .heroContent {
+    position: relative;
+    z-index: 3;
+    padding: 0 2.5rem 5rem 2.5rem;
+    max-width: 700px;
+    margin-top: auto;
+    pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+    .heroSlide .heroContent {
+        padding: 0 1rem 4rem 1rem;
+        max-width: 100%;
     }
 }
 
@@ -404,11 +478,22 @@
 }
 
 :global([data-theme='light']) .heroBackdropScrimLeft {
-    background: linear-gradient(90deg, rgba(248, 250, 252, 0.94) 0%, rgba(248, 250, 252, 0.72) 24%, rgba(248, 250, 252, 0.1) 45%, transparent 62%);
+    background: linear-gradient(90deg, 
+        rgba(248, 250, 252, 0.96) 0%, 
+        rgba(248, 250, 252, 0.88) 26%, 
+        rgba(248, 250, 252, 0.6) 46%, 
+        rgba(248, 250, 252, 0.18) 64%, 
+        transparent 76%
+    );
 }
 
 :global([data-theme='light']) .heroBackdropScrimBottom {
-    background: linear-gradient(0deg, #f8fafc 0%, rgba(248, 250, 252, 0.6) 8%, transparent 22%);
+    background: linear-gradient(0deg, 
+        #f8fafc 0%, 
+        rgba(248, 250, 252, 0.78) 10%, 
+        rgba(248, 250, 252, 0.25) 22%, 
+        transparent 38%
+    );
 }
 
 /* Top Bar: Filter Pills on Left, Separated Search on Right */
@@ -1232,13 +1317,15 @@
     margin: 4px 0;
 }
 
-.searchStatusMenuItemDelete {
-    color: #ef4444;
+.searchStatusMenuItemDelete,
+:global([data-theme='light']) .searchStatusMenuItemDelete {
+    color: #ef4444 !important;
 }
 
-.searchStatusMenuItemDelete:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
+.searchStatusMenuItemDelete:hover,
+:global([data-theme='light']) .searchStatusMenuItemDelete:hover {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
 }
 
 .searchItemDetailsIconBtn {
@@ -1455,11 +1542,13 @@
 
 :global([data-theme='light']) .heroTitle {
     color: #0f172a;
+    font-weight: 800;
     text-shadow: none;
 }
 
 :global([data-theme='light']) .heroOverview {
     color: #334155;
+    font-weight: 400;
     text-shadow: none;
 }
 

@@ -7,7 +7,7 @@ import {
     CreditCard,
     TvMinimalPlay,
     Calendar,
-    Sparkles,
+    Compass,
     Settings,
     LogOut,
     ChevronLeft,
@@ -43,17 +43,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
     }, []);
 
     useEffect(() => {
-        if (theme === 'system') {
-            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            const handleChange = (e: MediaQueryListEvent) => {
-                setActiveTheme(e.matches ? 'dark' : 'light');
-            };
-            setActiveTheme(mediaQuery.matches ? 'dark' : 'light');
-            mediaQuery.addEventListener('change', handleChange);
-            return () => mediaQuery.removeEventListener('change', handleChange);
-        } else {
-            setActiveTheme(theme as 'light' | 'dark');
-        }
+        setActiveTheme(theme === 'light' ? 'light' : 'dark');
     }, [theme]);
 
     const getCountryName = (code: string) => {
@@ -83,8 +73,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
         { name: 'Subscriptions', icon: CreditCard, path: '/dashboard/subscriptions' },
         { name: 'Watchlist', icon: TvMinimalPlay, path: '/dashboard/watchlist' },
         { name: 'Calendar', icon: Calendar, path: '/dashboard/calendar' },
-        { name: 'Recommendations', icon: Sparkles, path: '/dashboard/recommendations' },
-        { name: 'Profile', icon: Settings, path: '/profile' },
+        { name: 'Explore', icon: Compass, path: '/dashboard/recommendations' },
     ];
 
     const handleLogoutClick = () => {
@@ -156,48 +145,76 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                         );
                     })}
 
-                    <button
-                        type="button"
-                        className={`${styles.navItem} ${styles.feedbackNavItem}`}
-                        title={isCollapsed ? "Give Feedback & Report Issues" : ""}
-                        onClick={() => {
-                            setFeedbackModalOpen(true);
-                            if (window.innerWidth < 768) {
-                                toggle();
-                            }
-                        }}
-                    >
-                        <span className={styles.icon}>
-                            <MessageSquarePlus size={22} strokeWidth={2} />
-                        </span>
-                        {!isCollapsed && <span className={styles.label}>Feedback</span>}
-                    </button>
                 </nav>
 
                 <div className={styles.footer}>
-                    <div className={styles.themeToggleContainer}>
-                        <ThemeToggle isCollapsed={isCollapsed} className={styles.themeToggle} />
-                    </div>
+                    <div className={styles.utilityGroup}>
+                        <Link
+                            href="/profile"
+                            className={`${styles.utilityItem} ${pathname === '/profile' ? styles.utilityItemActive : ''}`}
+                            title={isCollapsed ? (countryCode ? `Profile (${getCountryName(countryCode)})` : 'Profile') : ''}
+                            onClick={() => {
+                                if (window.innerWidth < 768) {
+                                    toggle();
+                                }
+                            }}
+                        >
+                            <span className={styles.utilityIcon}>
+                                <Settings size={17} strokeWidth={pathname === '/profile' ? 2.2 : 1.9} />
+                            </span>
+                            {!isCollapsed && (
+                                <>
+                                    <span>Profile</span>
+                                    {countryCode && (
+                                        <span className={styles.profileRegionPill} title={`Region: ${getCountryName(countryCode)}`}>
+                                            <CountryFlag code={countryCode} size={13} />
+                                            <span>{countryCode}</span>
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                        </Link>
 
-                    {/* Region Badge in Sidebar */}
-                    <div className={styles.regionBadge}>
-                        {countryCode ? (
-                            <>
-                                <CountryFlag code={countryCode} size={18} />
-                                {!isCollapsed && <span className={styles.regionText}>{getCountryName(countryCode)}</span>}
-                            </>
-                        ) : (
-                            !isCollapsed ? (
-                                <div className="h-6 w-24 bg-gray-200 rounded animate-pulse" />
-                            ) : (
-                                <div className="h-6 w-6 bg-gray-200 rounded-full animate-pulse" />
-                            )
+                        {isCollapsed && countryCode && (
+                            <Link
+                                href="/profile"
+                                className={styles.collapsedRegionChip}
+                                title={`Region: ${getCountryName(countryCode)} (Change in Profile)`}
+                                onClick={() => {
+                                    if (window.innerWidth < 768) {
+                                        toggle();
+                                    }
+                                }}
+                            >
+                                <CountryFlag code={countryCode} size={14} />
+                            </Link>
                         )}
+
+                        <button
+                            type="button"
+                            className={styles.utilityItem}
+                            title={isCollapsed ? "Give Feedback & Report Issues" : ""}
+                            onClick={() => {
+                                setFeedbackModalOpen(true);
+                                if (window.innerWidth < 768) {
+                                    toggle();
+                                }
+                            }}
+                        >
+                            <span className={styles.utilityIcon}>
+                                <MessageSquarePlus size={17} strokeWidth={1.9} />
+                            </span>
+                            {!isCollapsed && <span>Feedback</span>}
+                        </button>
                     </div>
 
-                    <button onClick={handleLogoutClick} className={styles.logoutBtn} title="Logout">
-                        <span className={styles.icon}><LogOut size={20} /></span>
-                        {!isCollapsed && <span className={styles.label}>Logout</span>}
+                    <div className={styles.themeToggleContainer}>
+                        <ThemeToggle isCollapsed={isCollapsed} className={styles.themeToggle} compact />
+                    </div>
+
+                    <button onClick={handleLogoutClick} className={styles.logoutBtn} title={isCollapsed ? "Logout" : ""}>
+                        <span className={styles.logoutIcon}><LogOut size={17} strokeWidth={2} /></span>
+                        {!isCollapsed && <span>Logout</span>}
                     </button>
                 </div>
             </aside>

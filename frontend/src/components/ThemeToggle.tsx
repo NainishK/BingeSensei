@@ -1,79 +1,82 @@
 "use client";
 
-import { Moon, Sun, Laptop } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import React, { useEffect, useState } from "react";
+import styles from "./ThemeToggle.module.css";
 
 interface ThemeToggleProps {
     isCollapsed?: boolean;
-    className?: string; // Allow external styling
+    className?: string;
+    compact?: boolean;
 }
 
-export function ThemeToggle({ isCollapsed = false, className = '' }: ThemeToggleProps) {
+export function ThemeToggle({ isCollapsed = false, className = '', compact = false }: ThemeToggleProps) {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
-    // Avoid hydration mismatch
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    const isDark = mounted ? theme === "dark" : true;
+    const nextTheme = isDark ? "light" : "dark";
+    const label = isDark ? "Dark Mode" : "Light Mode";
+    const title = isDark ? "Switch to Light Mode" : "Switch to Dark Mode";
+
     if (!mounted) {
         return (
-            <div className={`flex items-center gap-3 p-3 rounded-xl opacity-50 ${className} ${isCollapsed ? 'justify-center' : ''}`}>
-                <Sun className="h-5 w-5" />
+            <div className={`${styles.toggleBtn} ${isCollapsed ? styles.toggleBtnCollapsed : ''} ${className}`} style={{ opacity: 0.5 }}>
+                {!isCollapsed && (
+                    <span className={`${styles.leftGroup} ${!compact ? styles.leftGroupDefault : ''}`}>
+                        <span className={`${styles.iconBox} ${!compact ? styles.iconBoxDefault : ''}`}>
+                            <Moon size={compact ? 17 : 20} />
+                        </span>
+                        <span className={compact ? styles.labelCompact : styles.labelDefault}>Dark Mode</span>
+                    </span>
+                )}
+                <span className={`${styles.switchTrack} ${styles.switchTrackDark}`} aria-hidden="true">
+                    <span className={styles.switchThumb}>
+                        <Moon size={11} strokeWidth={2.5} />
+                    </span>
+                </span>
             </div>
         );
     }
 
-    // Cycle theme: light -> dark -> system -> light
-    const getNextThemeInfo = () => {
-        if (theme === "light") {
-            return {
-                next: "dark" as const,
-                label: "Dark Mode",
-                icon: <Moon className="h-5 w-5 text-indigo-400" />,
-                title: "Switch to Dark Mode"
-            };
-        } else if (theme === "dark") {
-            return {
-                next: "system" as const,
-                label: "System Theme",
-                icon: <Laptop className="h-5 w-5 text-emerald-400" />,
-                title: "Switch to System Theme"
-            };
-        } else {
-            return {
-                next: "light" as const,
-                label: "Light Mode",
-                icon: <Sun className="h-5 w-5 text-amber-500" />,
-                title: "Switch to Light Mode"
-            };
-        }
-    };
-
-    const { next, label, icon, title } = getNextThemeInfo();
-
     return (
         <button
-            onClick={() => setTheme(next)}
-            className={`
-                flex items-center w-full text-left transition-colors duration-200
-                ${isCollapsed ? 'justify-center p-2' : ''}
-                ${className}
-            `}
-            aria-label="Toggle theme"
+            type="button"
+            role="switch"
+            aria-checked={isDark}
+            onClick={() => setTheme(nextTheme)}
+            className={`${styles.toggleBtn} ${isCollapsed ? styles.toggleBtnCollapsed : ''} ${className}`}
+            aria-label={title}
             title={isCollapsed ? title : ""}
         >
-            <span className="flex items-center justify-center min-w-[24px]">
-                {icon}
-            </span>
-
             {!isCollapsed && (
-                <span className="font-medium text-[0.95rem]">
-                    {label}
+                <span className={`${styles.leftGroup} ${!compact ? styles.leftGroupDefault : ''}`}>
+                    <span className={`${styles.iconBox} ${!compact ? styles.iconBoxDefault : ''}`}>
+                        {isDark ? (
+                            <Moon size={compact ? 17 : 20} style={{ color: '#818cf8' }} />
+                        ) : (
+                            <Sun size={compact ? 17 : 20} style={{ color: '#f59e0b' }} />
+                        )}
+                    </span>
+                    <span className={compact ? styles.labelCompact : styles.labelDefault}>
+                        {label}
+                    </span>
                 </span>
             )}
+
+            <span
+                aria-hidden="true"
+                className={`${styles.switchTrack} ${isDark ? styles.switchTrackDark : styles.switchTrackLight}`}
+            >
+                <span className={styles.switchThumb}>
+                    {isDark ? <Moon size={11} strokeWidth={2.5} /> : <Sun size={11} strokeWidth={2.5} />}
+                </span>
+            </span>
         </button>
     );
 }

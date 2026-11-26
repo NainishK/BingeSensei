@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 import { usePathname } from "next/navigation";
 
-type Theme = "dark" | "light" | "system";
+type Theme = "dark" | "light";
 
 type ThemeProviderProps = {
     children: React.ReactNode;
@@ -18,7 +18,7 @@ type ThemeProviderState = {
 };
 
 const initialState: ThemeProviderState = {
-    theme: "system",
+    theme: "dark",
     setTheme: () => null,
 };
 
@@ -26,14 +26,18 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
     children,
-    defaultTheme = "system",
+    defaultTheme = "dark",
     storageKey = "vite-ui-theme",
     ...props
 }: ThemeProviderProps) {
     const pathname = usePathname();
     const [theme, setTheme] = useState<Theme>(() => {
         if (typeof window !== "undefined") {
-            return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+            const stored = localStorage.getItem(storageKey);
+            if (stored === "light" || stored === "dark") {
+                return stored;
+            }
+            return defaultTheme;
         }
         return defaultTheme;
     });
@@ -54,19 +58,6 @@ export function ThemeProvider({
         if (isDarkOnlyPage) {
             applyTheme("dark");
             return;
-        }
-
-        if (theme === "system") {
-            const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-            const handleChange = (e: MediaQueryListEvent) => {
-                applyTheme(e.matches ? "dark" : "light");
-            };
-
-            applyTheme(mediaQuery.matches ? "dark" : "light");
-            mediaQuery.addEventListener("change", handleChange);
-            return () => {
-                mediaQuery.removeEventListener("change", handleChange);
-            };
         }
 
         applyTheme(theme);

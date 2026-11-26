@@ -169,55 +169,139 @@
     /* User Requested Icon Color */
 }
 
-/* Theme Toggle - Styled to match Region Badge */
+/* Theme Toggle & Subtle Utility Cluster */
+.utilityGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.utilityItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.82rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    background: transparent;
+    border: 1px solid transparent;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.utilityItem:hover {
+    background-color: rgba(139, 92, 246, 0.12);
+    color: var(--foreground);
+}
+
+.utilityItemActive {
+    background-color: var(--accent);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+:global([data-theme='dark']) .utilityItemActive {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+}
+
+.utilityIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    color: inherit;
+    opacity: 0.85;
+}
+
+.collapsed .utilityItem {
+    justify-content: center;
+    padding: 0.5rem 0;
+}
+
 .themeToggle {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.8rem 1rem;
-    border-radius: 12px;
-    background: var(--card);
-    /* Match card background */
-    border: 1px solid var(--border);
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    background: transparent;
+    border: 1px solid transparent;
     color: var(--muted-foreground);
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
 }
 
 .themeToggle:hover {
-    background-color: rgba(139, 92, 246, 0.15) !important;
+    background-color: rgba(139, 92, 246, 0.12) !important;
     color: var(--foreground);
-    border-color: rgba(139, 92, 246, 0.3);
+}
+
+.collapsed .themeToggle {
+    justify-content: center;
+    padding: 0.5rem 0;
 }
 
 .footer {
     border-top: 1px solid var(--border);
-    padding-top: 1.5rem;
+    padding-top: 0.85rem;
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
 }
 
 .logoutBtn {
     width: 100%;
-    padding: 0.8rem;
+    padding: 0.5rem 0.75rem;
     background-color: transparent;
     border: 1px solid transparent;
-    border-radius: 12px;
-    color: #666;
+    border-radius: 10px;
+    color: #ef4444;
     cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 500;
+    font-size: 0.82rem;
+    font-weight: 600;
     transition: all 0.2s;
     display: flex;
     align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+}
+
+.logoutIcon {
+    display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 0.8rem;
+    min-width: 20px;
+    color: #ef4444;
+}
+
+.logoutBtn:hover {
+    background-color: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+}
+
+:global([data-theme='dark']) .logoutBtn:hover {
+    color: #f87171;
 }
 
 .collapsed .logoutBtn {
-    padding: 0.8rem 0;
+    justify-content: center;
+    padding: 0.5rem 0;
 }
 
 /* Mobile Overlay */
@@ -264,47 +348,37 @@
 
 
 
-.regionBadge {
+.profileRegionPill {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--muted-foreground);
+    line-height: 1.2;
+}
+
+.collapsedRegionChip {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.8rem 1rem;
-    margin-bottom: 0.5rem;
-    background: var(--card);
-    /* Was #f8f9fa */
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    color: var(--muted-foreground);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: default;
-}
-
-/* Make it look like a button on hover */
-
-
-.collapsed .regionBadge {
     justify-content: center;
-    padding: 0.8rem 0;
-    background: transparent;
-    border: none;
+    padding: 0.35rem 0;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background-color 0.2s;
 }
 
-.flag {
-    font-size: 1.2rem;
-    line-height: 1;
-}
-
-.regionText {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.collapsedRegionChip:hover {
+    background-color: rgba(139, 92, 246, 0.12);
 }
 
 .themeToggleContainer {
     display: block;
     width: 100%;
-    margin-bottom: 0.5rem;
 }
 
 .collapsed .header {
