@@ -150,6 +150,26 @@
     color: var(--foreground) !important;
 }
 
+:global([data-theme='light']) .customDropdownMenu {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+:global([data-theme='light']) .customDropdownItem {
+    color: #334155;
+}
+
+:global([data-theme='light']) .customDropdownItem:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+:global([data-theme='light']) .selectedItem {
+    background: rgba(99, 102, 241, 0.1);
+    color: #4f46e5 !important;
+}
+
 .itemLeft {
     display: flex;
     align-items: center;
@@ -531,14 +551,18 @@
 
 @media (max-width: 639px) {
     .heroTopBar {
-        flex-wrap: wrap;
-        gap: 10px;
+        flex-wrap: nowrap;
+        gap: 8px;
+        align-items: center;
     }
     .heroTopBarLeft {
-        width: 100%;
+        flex: 1;
+        min-width: 0;
+        width: auto;
     }
     .heroTopBarRight {
-        width: 100%;
+        width: auto;
+        flex-shrink: 0;
         justify-content: flex-end;
     }
 }
@@ -550,8 +574,12 @@
 @media (max-width: 639px) {
     .mobileFilterDropdownWrapper {
         display: block;
-        width: 100%;
-        max-width: 280px;
+        width: auto;
+        max-width: 220px;
+    }
+    .heroTopBar .mobileFilterDropdown {
+        margin-bottom: 0;
+        width: auto;
     }
 }
 
@@ -638,6 +666,11 @@
     margin-bottom: 0;
 }
 
+.heroTopBar .customDropdownMenu {
+    min-width: 225px;
+    right: auto;
+}
+
 .heroTopBar .customDropdownTrigger {
     background: rgba(13, 17, 28, 0.52);
     backdrop-filter: blur(16px);
@@ -645,6 +678,36 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     border-radius: 12px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+:global([data-theme='light']) .heroTopBar .customDropdownTrigger {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: #0f172a;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+:global([data-theme='light']) .heroTopBar .customDropdownTrigger:hover {
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.45);
+}
+
+@media (max-width: 639px) {
+    .heroTopBar .customDropdownTrigger {
+        height: 36px;
+        padding: 0 0.7rem;
+        font-size: 0.8rem;
+        border-radius: 10px;
+        gap: 0.4rem;
+    }
+    .heroTopBar .triggerContent {
+        gap: 0.4rem;
+    }
+    .heroTopBar .pillCount {
+        font-size: 0.68rem;
+        padding: 1px 6px;
+    }
 }
 
 /* ── Separated Search Control in Hero Top Bar ── */
@@ -704,7 +767,11 @@
         display: none;
     }
     .heroSearchTriggerBtn {
-        padding: 0 11px;
+        height: 36px;
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 10px;
     }
 }
 
@@ -1939,16 +2006,51 @@
     }
 
     .heroTitle {
-        font-size: 1.5rem;
+        font-size: 1.45rem;
     }
 
     .heroOverview {
         -webkit-line-clamp: 2;
-        font-size: 0.85rem;
+        font-size: 0.82rem;
+    }
+
+    .heroActionsRow {
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .heroStatusDropdownContainer {
+        width: auto;
+        min-width: 150px;
+        flex: 0 1 auto;
+    }
+
+    .heroBtnPrimary,
+    .heroBtnInWatchlist {
+        min-width: 0;
+        height: 36px;
+        padding: 0 0.85rem;
+        font-size: 0.8rem;
+        border-radius: 10px;
+        gap: 6px;
+    }
+
+    .heroBtnSecondary {
+        height: 36px;
+        padding: 0 0.9rem;
+        font-size: 0.8rem;
+        border-radius: 10px;
+        gap: 6px;
+        white-space: nowrap;
     }
 
     .heroControlsRow {
         padding: 0 1rem 1rem 1rem;
+    }
+
+    .heroArrowBtn {
+        width: 32px;
+        height: 32px;
     }
 
     .heroDash {

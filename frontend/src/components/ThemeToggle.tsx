@@ -37,7 +37,7 @@ export function ThemeToggle({ isCollapsed = false, className = '', compact = fal
                 )}
                 <span className={`${styles.switchTrack} ${styles.switchTrackDark}`} aria-hidden="true">
                     <span className={styles.switchThumb}>
-                        <Moon size={11} strokeWidth={2.5} />
+                        <Moon size={9} strokeWidth={2.5} />
                     </span>
                 </span>
             </div>
@@ -74,7 +74,7 @@ export function ThemeToggle({ isCollapsed = false, className = '', compact = fal
                 className={`${styles.switchTrack} ${isDark ? styles.switchTrackDark : styles.switchTrackLight}`}
             >
                 <span className={styles.switchThumb}>
-                    {isDark ? <Moon size={11} strokeWidth={2.5} /> : <Sun size={11} strokeWidth={2.5} />}
+                    {isDark ? <Moon size={9} strokeWidth={2.5} /> : <Sun size={9} strokeWidth={2.5} />}
                 </span>
             </span>
         </button>

@@ -159,7 +159,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 }
                             }}
                         >
-                            <span className={styles.utilityIcon}>
+                            <span className={`${styles.utilityIcon} ${styles.settingsIcon}`}>
                                 <Settings size={17} strokeWidth={pathname === '/profile' ? 2.2 : 1.9} />
                             </span>
                             {!isCollapsed && (
@@ -201,7 +201,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 }
                             }}
                         >
-                            <span className={styles.utilityIcon}>
+                            <span className={`${styles.utilityIcon} ${styles.feedbackIcon}`}>
                                 <MessageSquarePlus size={17} strokeWidth={1.9} />
                             </span>
                             {!isCollapsed && <span>Feedback</span>}

@@ -54,8 +54,8 @@
 
 .switchTrack {
     position: relative;
-    width: 44px;
-    height: 24px;
+    width: 34px;
+    height: 20px;
     border-radius: 9999px;
     flex-shrink: 0;
     padding: 2px;
@@ -74,24 +74,24 @@
 .switchTrackDark {
     background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
     border: 1px solid rgba(129, 140, 248, 0.5);
-    box-shadow: 0 0 10px rgba(99, 102, 241, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.18);
 }
 
 .switchThumb {
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
     transform: translateX(0);
     color: #f59e0b;
 }
 
 .switchTrackDark .switchThumb {
-    transform: translateX(20px);
+    transform: translateX(14px);
     color: #4f46e5;
 }

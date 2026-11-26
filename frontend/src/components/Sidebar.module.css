@@ -222,7 +222,23 @@
     justify-content: center;
     min-width: 20px;
     color: inherit;
-    opacity: 0.85;
+    opacity: 0.9;
+}
+
+.settingsIcon {
+    color: #0284c7;
+}
+
+:global([data-theme='dark']) .settingsIcon {
+    color: #38bdf8;
+}
+
+.feedbackIcon {
+    color: #059669;
+}
+
+:global([data-theme='dark']) .feedbackIcon {
+    color: #34d399;
 }
 
 .collapsed .utilityItem {
