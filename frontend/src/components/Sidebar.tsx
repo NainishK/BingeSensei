@@ -96,7 +96,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
             <aside className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''} ${className}`}>
                 <div className={styles.header}>
                     <Link href="/dashboard" className={styles.logoContainer}>
-                        {isCollapsed ? (
+                        <span className={styles.logoIconWrap}>
                             <Image
                                 src="/logo-icon-final-v3.png"
                                 alt="BingeSensei Icon"
@@ -105,7 +105,8 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 className={styles.logoIcon}
                                 style={{ objectFit: 'contain' }}
                             />
-                        ) : (
+                        </span>
+                        <span className={styles.logoFullWrap}>
                             <Image
                                 src={(!mounted || activeTheme === 'dark') ? '/logo-dark-theme-final-v3.png' : '/logo-light-theme-final-v3.png'}
                                 alt="BingeSensei Logo"
@@ -114,10 +115,16 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 className={styles.logoFull}
                                 style={{ objectFit: 'contain' }}
                             />
-                        )}
+                        </span>
                     </Link>
-                    <button onClick={toggle} className={styles.toggleBtn} title={isCollapsed ? "Expand" : "Collapse"}>
+                    <button
+                        onClick={toggle}
+                        className={styles.toggleBtn}
+                        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        title={isCollapsed ? undefined : "Collapse"}
+                    >
                         {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                        {isCollapsed && <span className={styles.collapsedTooltip}>Expand</span>}
                     </button>
                 </div>
 
@@ -130,7 +137,6 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 key={item.path}
                                 href={item.path}
                                 className={`${styles.navItem} ${isActive ? styles.active : ''}`}
-                                title={isCollapsed ? item.name : ''}
                                 onClick={() => {
                                     if (window.innerWidth < 768) {
                                         toggle();
@@ -141,6 +147,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                     <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                                 </span>
                                 {!isCollapsed && <span className={styles.label}>{item.name}</span>}
+                                {isCollapsed && <span className={styles.collapsedTooltip}>{item.name}</span>}
                             </Link>
                         );
                     })}
@@ -152,7 +159,6 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                         <Link
                             href="/profile"
                             className={`${styles.utilityItem} ${pathname === '/profile' ? styles.utilityItemActive : ''}`}
-                            title={isCollapsed ? (countryCode ? `Profile (${getCountryName(countryCode)})` : 'Profile') : ''}
                             onClick={() => {
                                 if (window.innerWidth < 768) {
                                     toggle();
@@ -173,13 +179,23 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                     )}
                                 </>
                             )}
+                            {isCollapsed && (
+                                <span className={styles.collapsedTooltip}>
+                                    <span>Profile</span>
+                                    {countryCode && (
+                                        <span className={styles.profileRegionPill}>
+                                            <CountryFlag code={countryCode} size={12} />
+                                            <span>{countryCode}</span>
+                                        </span>
+                                    )}
+                                </span>
+                            )}
                         </Link>
 
                         {isCollapsed && countryCode && (
                             <Link
                                 href="/profile"
                                 className={styles.collapsedRegionChip}
-                                title={`Region: ${getCountryName(countryCode)} (Change in Profile)`}
                                 onClick={() => {
                                     if (window.innerWidth < 768) {
                                         toggle();
@@ -187,13 +203,15 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 }}
                             >
                                 <CountryFlag code={countryCode} size={14} />
+                                <span className={styles.collapsedTooltip}>
+                                    Region: {getCountryName(countryCode)}
+                                </span>
                             </Link>
                         )}
 
                         <button
                             type="button"
                             className={styles.utilityItem}
-                            title={isCollapsed ? "Give Feedback & Report Issues" : ""}
                             onClick={() => {
                                 setFeedbackModalOpen(true);
                                 if (window.innerWidth < 768) {
@@ -205,6 +223,7 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 <MessageSquarePlus size={17} strokeWidth={1.9} />
                             </span>
                             {!isCollapsed && <span>Feedback</span>}
+                            {isCollapsed && <span className={styles.collapsedTooltip}>Feedback &amp; Report Issue</span>}
                         </button>
                     </div>
 
@@ -212,9 +231,10 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                         <ThemeToggle isCollapsed={isCollapsed} className={styles.themeToggle} compact />
                     </div>
 
-                    <button onClick={handleLogoutClick} className={styles.logoutBtn} title={isCollapsed ? "Logout" : ""}>
+                    <button onClick={handleLogoutClick} className={styles.logoutBtn}>
                         <span className={styles.logoutIcon}><LogOut size={17} strokeWidth={2} /></span>
                         {!isCollapsed && <span>Logout</span>}
+                        {isCollapsed && <span className={`${styles.collapsedTooltip} ${styles.collapsedTooltipDanger}`}>Logout</span>}
                     </button>
                 </div>
             </aside>

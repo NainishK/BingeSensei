@@ -12,6 +12,7 @@
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.02);
+    overflow: visible;
 }
 
 .collapsed {
@@ -28,21 +29,6 @@
     padding: 0 0.5rem;
 }
 
-.logo {
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: var(--foreground);
-    text-decoration: none;
-    letter-spacing: -0.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    background: linear-gradient(135deg, var(--foreground) 0%, var(--muted-foreground) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    /* Standard property */
-    -webkit-text-fill-color: transparent;
-}
-
 .logoContainer {
     display: flex;
     align-items: center;
@@ -50,6 +36,54 @@
     flex: 1;
     min-width: 0;
     padding-left: 0.25rem;
+    position: relative;
+    height: 44px;
+    overflow: hidden;
+}
+
+.collapsed .logoContainer {
+    flex: 0 0 auto;
+    justify-content: center;
+    padding-left: 0;
+    width: 42px;
+}
+
+.logoIconWrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    transform: scale(0.85);
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.14s ease;
+}
+
+.collapsed .logoIconWrap {
+    opacity: 1;
+    width: 42px;
+    transform: scale(1);
+    pointer-events: auto;
+    transition: opacity 0.18s ease 0.08s, transform 0.2s ease 0.08s;
+}
+
+.logoFullWrap {
+    display: inline-flex;
+    align-items: center;
+    opacity: 1;
+    transform: translateX(0);
+    white-space: nowrap;
+    transition: opacity 0.22s ease 0.18s, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) 0.18s;
+}
+
+.collapsed .logoFullWrap {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    transform: translateX(-8px);
+    pointer-events: none;
+    transition: opacity 0.08s ease, transform 0.1s ease;
 }
 
 .logoFull {
@@ -73,6 +107,8 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    position: relative;
+    flex-shrink: 0;
 }
 
 .toggleBtn:hover {
@@ -117,6 +153,7 @@
 .collapsed .navItem {
     justify-content: center;
     padding: 0.8rem 0;
+    overflow: visible;
 }
 
 .navItem:hover,
@@ -404,4 +441,84 @@
     align-items: center;
     justify-content: center;
     margin-bottom: 2rem;
+}
+
+.collapsed .utilityItem,
+.collapsed .collapsedRegionChip,
+.collapsed .logoutBtn {
+    position: relative;
+    overflow: visible;
+}
+
+/* Modern Floating Hover Popout for Collapsed Sidebar Items */
+.collapsedTooltip {
+    position: absolute;
+    left: calc(100% + 14px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-8px) scale(0.95);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 250;
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.48rem 0.85rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.16s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:global([data-theme='light']) .collapsedTooltip {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+}
+
+.collapsedTooltip::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    background: inherit;
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transform: translateY(-50%) rotate(45deg);
+}
+
+:global([data-theme='light']) .collapsedTooltip::before {
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.collapsedTooltipDanger {
+    color: #ef4444 !important;
+}
+
+.collapsed .navItem:hover .collapsedTooltip,
+.collapsed .navItem:focus-visible .collapsedTooltip,
+.collapsed .utilityItem:hover .collapsedTooltip,
+.collapsed .utilityItem:focus-visible .collapsedTooltip,
+.collapsed .collapsedRegionChip:hover .collapsedTooltip,
+.collapsed .collapsedRegionChip:focus-visible .collapsedTooltip,
+.collapsed .logoutBtn:hover .collapsedTooltip,
+.collapsed .logoutBtn:focus-visible .collapsedTooltip,
+.collapsed .toggleBtn:hover .collapsedTooltip,
+.collapsed .toggleBtn:focus-visible .collapsedTooltip {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(1);
+}
+
+@media (max-width: 768px) {
+    .collapsedTooltip {
+        display: none;
+    }
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import MediaCard, { MediaItem } from '@/components/MediaCard';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import AddMediaModal from '@/components/AddMediaModal';
+import InlineMediaSearch from '@/components/InlineMediaSearch';
 import ImportExportModal from '@/components/ImportExportModal';
 import { Plus, Search, Clapperboard, CalendarClock, CheckCircle, LayoutGrid, List, Layers, ArrowUp, ArrowDown, PauseCircle, XCircle, SlidersHorizontal, ChevronDown, ChevronUp, Download, Loader2 } from 'lucide-react';
 import styles from './watchlist.module.css';
@@ -660,12 +660,23 @@ export default function WatchlistPage() {
                     <p className={styles.subtitle}>Track what you're watching and discover new favorites.</p>
                 </div>
                 <div className={styles.headerActions}>
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className={styles.addButton}
-                    >
-                        <Plus size={20} /> Add New
-                    </button>
+                    <InlineMediaSearch
+                        watchlist={items.map((item) => ({
+                            dbId: item.dbId || 0,
+                            tmdbId: item.id,
+                            status: item.status || '',
+                            user_rating: item.user_rating,
+                            title: item.title || item.name,
+                            current_season: item.current_season,
+                            current_episode: item.current_episode,
+                            notes: item.notes,
+                        }))}
+                        onWatchlistUpdate={() => fetchWatchlist(true)}
+                        variant="watchlist"
+                        triggerLabel="Add New"
+                        isOpen={isAddModalOpen}
+                        onOpenChange={setIsAddModalOpen}
+                    />
                 </div>
             </div>
 
@@ -1059,13 +1070,6 @@ export default function WatchlistPage() {
                 isDangerous={true}
             />
 
-            <AddMediaModal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-                onAddSuccess={() => fetchWatchlist(true)} // Background refresh
-                existingIds={new Set(items.map(item => item.id))}
-            />
-
             {/* Mobile FABs */}
             <div className={styles.fabContainer}>
                 {showBackToTop && (
@@ -1076,7 +1080,7 @@ export default function WatchlistPage() {
                         <ArrowUp size={20} />
                     </button>
                 )}
-                <button className={styles.fabButton} onClick={() => setIsAddModalOpen(true)}>
+                <button className={styles.fabButton} data-inline-search-fab="true" onClick={() => setIsAddModalOpen(true)}>
                     <Plus size={24} />
                 </button>
             </div>

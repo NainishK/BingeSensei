@@ -52,7 +52,6 @@ export function ThemeToggle({ isCollapsed = false, className = '', compact = fal
             onClick={() => setTheme(nextTheme)}
             className={`${styles.toggleBtn} ${isCollapsed ? styles.toggleBtnCollapsed : ''} ${className}`}
             aria-label={title}
-            title={isCollapsed ? title : ""}
         >
             {!isCollapsed && (
                 <span className={`${styles.leftGroup} ${!compact ? styles.leftGroupDefault : ''}`}>
@@ -77,6 +76,8 @@ export function ThemeToggle({ isCollapsed = false, className = '', compact = fal
                     {isDark ? <Moon size={9} strokeWidth={2.5} /> : <Sun size={9} strokeWidth={2.5} />}
                 </span>
             </span>
+
+            {isCollapsed && <span className={styles.collapsedTooltip}>{title}</span>}
         </button>
     );
 }
