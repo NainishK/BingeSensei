@@ -154,17 +154,17 @@ def create_watchlist_item(db: Session, item: schemas.WatchlistItemCreate, user_i
             providers = tmdb_client.get_watch_providers(item.media_type, item.tmdb_id, region=country)
             flatrate = providers.get("flatrate", [])
             
-            # 3. Find Intersection (Provider must be in User's Active Subs)
+            # 3. Find Intersection (Provider must be in User's Active Subs, using shared provider_utils)
+            import provider_utils
             matched_provider = None
             for p in flatrate:
                 p_name = p.get("provider_name", "")
-                # Normalize for flexible matching (e.g., "Disney+ Hotstar" vs "Hotstar")
-                p_lower = p_name.lower()
-                
-                # Check strict match or containment
-                for sub_name in active_services:
-                    if sub_name in p_lower or p_lower in sub_name:
-                        matched_provider = p_name
+                p_id = p.get("provider_id")
+                for sub in user_subs:
+                    if sub.country and sub.country != country:
+                        continue
+                    if provider_utils.match_provider_to_service(p_id, p_name, sub.service_name):
+                        matched_provider = sub.service_name
                         break
                 if matched_provider:
                     break

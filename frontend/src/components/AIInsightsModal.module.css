@@ -862,3 +862,23 @@
     border-color: rgba(245, 158, 11, 0.2);
     color: #fcd34d;
 }
+
+.refreshingBanner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.22);
+    color: #6d28d9;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+:global([data-theme='dark']) .refreshingBanner {
+    background: rgba(124, 58, 237, 0.16);
+    border-color: rgba(167, 139, 250, 0.28);
+    color: #ddd6fe;
+}

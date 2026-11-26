@@ -9,7 +9,7 @@
     left: 0;
     top: 0;
     padding: 1.5rem 1rem;
-    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.02);
     overflow: visible;
@@ -74,7 +74,7 @@
     opacity: 1;
     transform: translateX(0);
     white-space: nowrap;
-    transition: opacity 0.22s ease 0.18s, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) 0.18s;
+    transition: opacity 0.2s ease 0.09s, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) 0.09s;
 }
 
 .collapsed .logoFullWrap {
@@ -106,7 +106,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, color 0.2s ease;
     position: relative;
     flex-shrink: 0;
 }
@@ -116,11 +116,65 @@
     color: var(--foreground);
 }
 
+.toggleChevron {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(0deg);
+}
+
+.toggleChevronExpanded {
+    transform: rotate(180deg);
+}
+
 .nav {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     flex: 1;
+    position: relative;
+}
+
+.navActiveIndicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 0;
+    box-sizing: border-box;
+    background-color: var(--accent);
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.12);
+    transition:
+        transform 0.36s cubic-bezier(0.34, 1.35, 0.64, 1),
+        height 0.24s ease,
+        opacity 0.2s ease;
+    will-change: transform, height;
+}
+
+.navActiveIndicator::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 22%;
+    bottom: 22%;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, #6366f1, #3b82f6);
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+
+:global(.dark) .navActiveIndicator,
+:global([data-theme='dark']) .navActiveIndicator {
+    background-color: rgba(59, 130, 246, 0.16);
+    border-color: rgba(96, 165, 250, 0.28);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.16);
+}
+
+.collapsed .navActiveIndicator::before {
+    opacity: 0;
 }
 
 .navItem {
@@ -130,13 +184,19 @@
     text-decoration: none;
     font-weight: 500;
     font-size: 0.95rem;
-    transition: all 0.2s ease;
+    transition:
+        background-color 0.22s ease,
+        color 0.22s ease,
+        transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        border-color 0.22s ease;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: flex-start;
+    gap: 0;
     white-space: nowrap;
     overflow: hidden;
     position: relative;
+    z-index: 1;
     border: 1px solid transparent;
 }
 
@@ -151,50 +211,76 @@
 }
 
 .collapsed .navItem {
-    justify-content: center;
-    padding: 0.8rem 0;
     overflow: visible;
+}
+
+.collapsed .navItem:hover {
+    z-index: 30;
 }
 
 .navItem:hover,
 .active:hover {
-    background-color: rgba(139, 92, 246, 0.15) !important;
-    /* Purple/Violet tint - Force override active state */
-    color: var(--foreground) !important;
-    /* Force White/Foreground text on hover */
+    background-color: rgba(139, 92, 246, 0.14);
+    color: var(--foreground);
     cursor: pointer;
 }
 
+.navItem:active {
+    transform: scale(0.97);
+}
+
 .active {
-    background-color: var(--accent);
-    /* Uses theme accent instead of #f0f7ff */
+    background-color: transparent;
     color: var(--primary);
     font-weight: 600;
     border: 1px solid transparent;
-    /* Remove hardcoded blue border */
 }
 
-/* Dark mode specific override if needed, but var(--accent) handles it */
 :global(.dark) .active,
 :global([data-theme='dark']) .active {
-    background-color: rgba(59, 130, 246, 0.15);
-    /* More subtle blue tint for dark mode active */
+    background-color: transparent;
     color: #60a5fa;
-    /* Blue-400 */
 }
 
-/* Optional: Left accent line for active state */
-.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 50%;
-    width: 3px;
-    background-color: #0070f3;
-    border-radius: 0 4px 4px 0;
+.label {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 170px;
+    margin-left: 1rem;
+    opacity: 1;
+    overflow: hidden;
+    transform: translateX(0);
+    transition:
+        opacity 0.2s ease calc(var(--item-index, 0) * 16ms + 85ms),
+        transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--item-index, 0) * 16ms + 85ms),
+        max-width 0.26s cubic-bezier(0.4, 0, 0.2, 1) 0.02s,
+        margin-left 0.26s cubic-bezier(0.4, 0, 0.2, 1) 0.02s;
+}
+
+.collapsed .label {
+    max-width: 0;
+    margin-left: 0;
     opacity: 0;
+    transform: translateX(-8px);
+    pointer-events: none;
+    transition:
+        opacity 0.09s ease,
+        transform 0.12s ease,
+        max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.04s,
+        margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
+}
+
+.labelInner {
+    display: inline-block;
+    white-space: nowrap;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.navItem:hover .labelInner,
+.utilityItem:hover .labelInner,
+.logoutBtn:hover .labelInner {
+    transform: translateX(3px);
 }
 
 .icon {
@@ -202,8 +288,20 @@
     align-items: center;
     justify-content: center;
     min-width: 24px;
+    width: 24px;
+    flex-shrink: 0;
     color: #7c87f7;
-    /* User Requested Icon Color */
+    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+}
+
+.navItem:hover .icon {
+    transform: scale(1.12) translateY(-1px);
+    color: #939dff;
+}
+
+.active .icon {
+    color: #60a5fa;
+    transform: scale(1.06);
 }
 
 /* Theme Toggle & Subtle Utility Cluster */
@@ -219,14 +317,15 @@
 .utilityItem {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0.5rem 1rem;
     border-radius: 10px;
     color: var(--muted-foreground);
     text-decoration: none;
     font-weight: 500;
     font-size: 0.82rem;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     white-space: nowrap;
     overflow: hidden;
     background: transparent;
@@ -235,6 +334,38 @@
     text-align: left;
     cursor: pointer;
     font-family: inherit;
+    position: relative;
+}
+
+.utilityLabel {
+    display: inline-flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    max-width: 170px;
+    margin-left: 0.75rem;
+    opacity: 1;
+    overflow: hidden;
+    transform: translateX(0);
+    transition:
+        opacity 0.2s ease 0.09s,
+        transform 0.24s cubic-bezier(0.22, 1, 0.36, 1) 0.09s,
+        max-width 0.26s cubic-bezier(0.4, 0, 0.2, 1) 0.02s,
+        margin-left 0.26s cubic-bezier(0.4, 0, 0.2, 1) 0.02s;
+}
+
+.collapsed .utilityLabel {
+    flex: 0 0 auto;
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+    transform: translateX(-8px);
+    pointer-events: none;
+    transition:
+        opacity 0.09s ease,
+        transform 0.12s ease,
+        max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.04s,
+        margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.04s;
 }
 
 .utilityItem:hover {
@@ -257,9 +388,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
+    min-width: 24px;
+    width: 24px;
+    flex-shrink: 0;
     color: inherit;
     opacity: 0.9;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.utilityItem:hover .utilityIcon,
+.logoutBtn:hover .logoutIcon {
+    transform: scale(1.12) translateY(-1px);
+}
+
+.utilityItem:active,
+.logoutBtn:active {
+    transform: scale(0.97);
 }
 
 .settingsIcon {
@@ -279,15 +423,14 @@
 }
 
 .collapsed .utilityItem {
-    justify-content: center;
-    padding: 0.5rem 0;
+    overflow: visible;
 }
 
 .themeToggle {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 1rem;
     border-radius: 10px;
     background: transparent;
     border: 1px solid transparent;
@@ -295,7 +438,7 @@
     font-weight: 500;
     font-size: 0.82rem;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     width: 100%;
 }
 
@@ -320,7 +463,7 @@
 
 .logoutBtn {
     width: 100%;
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 1rem;
     background-color: transparent;
     border: 1px solid transparent;
     border-radius: 10px;
@@ -328,19 +471,25 @@
     cursor: pointer;
     font-size: 0.82rem;
     font-weight: 600;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 0.75rem;
+    gap: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
 }
 
 .logoutIcon {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
+    min-width: 24px;
+    width: 24px;
+    flex-shrink: 0;
     color: #ef4444;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .logoutBtn:hover {
@@ -353,8 +502,7 @@
 }
 
 .collapsed .logoutBtn {
-    justify-content: center;
-    padding: 0.5rem 0;
+    overflow: visible;
 }
 
 /* Mobile Overlay */
@@ -384,14 +532,12 @@
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(0);
-        /* On mobile, standard state is visible (if not collapsed logic overridden) */
-        /* Actually, we want: Collapsed = Hidden offscreen. Expanded = Visible. */
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .sidebar.collapsed {
         transform: translateX(-100%);
         width: 250px;
-        /* Keep width fixed even when "collapsed" (hidden) so it slides out nicely */
     }
 
     .mobileOverlay {
@@ -520,5 +666,31 @@
 @media (max-width: 768px) {
     .collapsedTooltip {
         display: none;
+    }
+}
+
+.collapsed .utilityItem:hover,
+.collapsed .collapsedRegionChip:hover,
+.collapsed .logoutBtn:hover {
+    z-index: 30;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .logoIconWrap,
+    .logoFullWrap,
+    .toggleChevron,
+    .navActiveIndicator,
+    .navItem,
+    .icon,
+    .label,
+    .labelInner,
+    .utilityLabel,
+    .utilityIcon,
+    .logoutBtn,
+    .logoutIcon,
+    .collapsedTooltip {
+        transition: none !important;
+        animation: none !important;
     }
 }

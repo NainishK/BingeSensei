@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -33,10 +33,22 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
     const router = useRouter();
     const [logoutModalOpen, setLogoutModalOpen] = useState(false);
     const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-    
+
     const { theme } = useTheme();
     const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
     const [mounted, setMounted] = useState(false);
+
+    const navRef = useRef<HTMLElement | null>(null);
+    const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+    const [indicatorStyle, setIndicatorStyle] = useState<{
+        top: number;
+        height: number;
+        opacity: number;
+    }>({
+        top: 0,
+        height: 0,
+        opacity: 0,
+    });
 
     useEffect(() => {
         setMounted(true);
@@ -75,6 +87,28 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
         { name: 'Calendar', icon: Calendar, path: '/dashboard/calendar' },
         { name: 'Explore', icon: Compass, path: '/dashboard/recommendations' },
     ];
+
+    const updateNavIndicator = useCallback(() => {
+        const activeEl = itemRefs.current[pathname];
+        if (activeEl && activeEl.offsetHeight > 0) {
+            setIndicatorStyle({
+                top: activeEl.offsetTop,
+                height: activeEl.offsetHeight,
+                opacity: 1,
+            });
+        } else {
+            setIndicatorStyle((prev) => ({ ...prev, opacity: 0 }));
+        }
+    }, [pathname]);
+
+    useEffect(() => {
+        const rafId = requestAnimationFrame(updateNavIndicator);
+        window.addEventListener('resize', updateNavIndicator);
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', updateNavIndicator);
+        };
+    }, [updateNavIndicator, mounted]);
 
     const handleLogoutClick = () => {
         setLogoutModalOpen(true);
@@ -123,20 +157,34 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                         title={isCollapsed ? undefined : "Collapse"}
                     >
-                        {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                        <ChevronRight
+                            size={20}
+                            className={`${styles.toggleChevron} ${!isCollapsed ? styles.toggleChevronExpanded : ''}`}
+                        />
                         {isCollapsed && <span className={styles.collapsedTooltip}>Expand</span>}
                     </button>
                 </div>
 
-                <nav className={styles.nav}>
-                    {navItems.map((item) => {
+                <nav className={styles.nav} ref={navRef}>
+                    <span
+                        aria-hidden="true"
+                        className={styles.navActiveIndicator}
+                        style={{
+                            transform: `translate3d(0, ${indicatorStyle.top}px, 0)`,
+                            height: indicatorStyle.height ? `${indicatorStyle.height}px` : undefined,
+                            opacity: indicatorStyle.opacity,
+                        }}
+                    />
+                    {navItems.map((item, index) => {
                         const isActive = pathname === item.path;
                         const Icon = item.icon;
                         return (
                             <Link
                                 key={item.path}
                                 href={item.path}
+                                ref={(el) => { itemRefs.current[item.path] = el; }}
                                 className={`${styles.navItem} ${isActive ? styles.active : ''}`}
+                                style={{ '--item-index': index } as React.CSSProperties}
                                 onClick={() => {
                                     if (window.innerWidth < 768) {
                                         toggle();
@@ -146,7 +194,9 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                                 <span className={styles.icon}>
                                     <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                                 </span>
-                                {!isCollapsed && <span className={styles.label}>{item.name}</span>}
+                                <span className={styles.label}>
+                                    <span className={styles.labelInner}>{item.name}</span>
+                                </span>
                                 {isCollapsed && <span className={styles.collapsedTooltip}>{item.name}</span>}
                             </Link>
                         );
@@ -168,17 +218,15 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                             <span className={`${styles.utilityIcon} ${styles.settingsIcon}`}>
                                 <Settings size={17} strokeWidth={pathname === '/profile' ? 2.2 : 1.9} />
                             </span>
-                            {!isCollapsed && (
-                                <>
-                                    <span>Profile</span>
-                                    {countryCode && (
-                                        <span className={styles.profileRegionPill} title={`Region: ${getCountryName(countryCode)}`}>
-                                            <CountryFlag code={countryCode} size={13} />
-                                            <span>{countryCode}</span>
-                                        </span>
-                                    )}
-                                </>
-                            )}
+                            <span className={styles.utilityLabel}>
+                                <span className={styles.labelInner}>Profile</span>
+                                {countryCode && (
+                                    <span className={styles.profileRegionPill} title={`Region: ${getCountryName(countryCode)}`}>
+                                        <CountryFlag code={countryCode} size={13} />
+                                        <span>{countryCode}</span>
+                                    </span>
+                                )}
+                            </span>
                             {isCollapsed && (
                                 <span className={styles.collapsedTooltip}>
                                     <span>Profile</span>
@@ -222,7 +270,9 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
                             <span className={`${styles.utilityIcon} ${styles.feedbackIcon}`}>
                                 <MessageSquarePlus size={17} strokeWidth={1.9} />
                             </span>
-                            {!isCollapsed && <span>Feedback</span>}
+                            <span className={styles.utilityLabel}>
+                                <span className={styles.labelInner}>Feedback</span>
+                            </span>
                             {isCollapsed && <span className={styles.collapsedTooltip}>Feedback &amp; Report Issue</span>}
                         </button>
                     </div>
@@ -233,7 +283,9 @@ export default function Sidebar({ isCollapsed, toggle, className = '', countryCo
 
                     <button onClick={handleLogoutClick} className={styles.logoutBtn}>
                         <span className={styles.logoutIcon}><LogOut size={17} strokeWidth={2} /></span>
-                        {!isCollapsed && <span>Logout</span>}
+                        <span className={styles.utilityLabel}>
+                            <span className={styles.labelInner}>Logout</span>
+                        </span>
                         {isCollapsed && <span className={`${styles.collapsedTooltip} ${styles.collapsedTooltipDanger}`}>Logout</span>}
                     </button>
                 </div>

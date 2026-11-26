@@ -18,6 +18,7 @@ interface AIInsightsModalProps {
 const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watchlist = [], onWatchlistUpdate }) => {
     const [activeTab, setActiveTab] = useState<'picks' | 'strategy'>('picks');
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [data, setData] = useState<AIUnifiedResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
@@ -40,44 +41,96 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
     // Deletion State
     const [itemToDelete, setItemToDelete] = useState<{ id: number; title: string } | null>(null);
 
-    // Usage State for First-Time Logic
+    // Usage & Identity State for Client Caching
     const [lastAiUsage, setLastAiUsage] = useState<string | null>(null);
     const [hasData, setHasData] = useState(false);
+    const [userId, setUserId] = useState<number | null>(null);
+    const [prefsLoaded, setPrefsLoaded] = useState(false);
 
     const autoLoadRef = useRef(false);
+    const userIdRef = useRef<number | null>(null);
+    const requestSeqRef = useRef(0);
+    const dataRef = useRef<AIUnifiedResponse | null>(null);
 
+    const commitData = (next: AIUnifiedResponse | null) => {
+        dataRef.current = next;
+        setData(next);
+    };
 
     const [userCountry, setUserCountry] = useState<string>('US'); // Default US
+
+    const getCacheKey = (uid: number | null, country: string) =>
+        uid ? `binge_ai_cache_${uid}_${country}` : `binge_ai_cache_${country}`;
+
+    const readLocalInsights = (uid: number | null, country: string): AIUnifiedResponse | null => {
+        try {
+            const raw = localStorage.getItem(getCacheKey(uid, country));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed?.data) return null;
+            // Respect 7-day client TTL matching backend cache
+            if (parsed.cachedAt && Date.now() - parsed.cachedAt > 7 * 24 * 60 * 60 * 1000) {
+                return null;
+            }
+            const d: AIUnifiedResponse = parsed.data;
+            if ((d.picks && d.picks.length >= 4) || (d.strategy && d.strategy.length > 0 && d.picks && d.picks.length > 0)) {
+                return d;
+            }
+        } catch { /* ignore */ }
+        return null;
+    };
+
+    const writeLocalInsights = (uid: number | null, country: string, payload: AIUnifiedResponse) => {
+        try {
+            localStorage.setItem(
+                getCacheKey(uid, country),
+                JSON.stringify({ data: payload, cachedAt: Date.now() })
+            );
+            const existing: string[] = JSON.parse(localStorage.getItem('binge_ai_regions') || '[]');
+            if (!existing.includes(country)) {
+                localStorage.setItem('binge_ai_regions', JSON.stringify([...existing, country]));
+            }
+            localStorage.setItem('last_ai_region', country);
+        } catch { /* ignore */ }
+    };
 
     const fetchPreferences = async () => {
         try {
             const res = await api.get('/users/me/');
-            if (res.data.country) {
-                if (res.data.country !== userCountry) {
-                    setData(null);
+            const resolvedUid: number | null = res.data.id ?? null;
+            const resolvedCountry: string = res.data.country || 'US';
+
+            userIdRef.current = resolvedUid;
+            setUserId(resolvedUid);
+            setUserCountry(resolvedCountry);
+
+            // Preserve matching in-memory data; clear only if country actually changed from existing loaded data
+            const currentData = dataRef.current;
+            if (currentData && currentData.country && currentData.country !== resolvedCountry) {
+                commitData(null);
+            } else if (!currentData) {
+                const localCached = readLocalInsights(resolvedUid, resolvedCountry);
+                if (localCached) {
+                    commitData(localCached);
                 }
-                setUserCountry(res.data.country);
             }
+
             if (res.data.preferences) {
                 const prefs = JSON.parse(res.data.preferences);
-                // Auto-set currency if missing
                 if (!prefs.target_currency && res.data.country) {
                     prefs.target_currency = COUNTRY_CURRENCY_MAP[res.data.country] || 'USD';
                 }
                 setPreferences(prefs);
             }
-            // Logic to set aiAllowed and status
             setAiAllowed(!!res.data.ai_allowed);
             setAccessStatus(res.data.ai_access_status || 'none');
             setLastAiUsage(res.data.last_ai_usage);
 
-            // Check if user has data (subscriptions OR watchlist)
             const subCount = res.data.subscriptions ? res.data.subscriptions.length : 0;
-            const watchCount = watchlist.length; // Use prop or res.data.watchlist
+            const watchCount = watchlist.length;
             setHasData(subCount > 0 || watchCount > 0);
 
             if (res.data.preferences) {
-                // Initialize currency even if no prefs yet
                 setPreferences(prev => ({
                     ...prev,
                     target_currency: COUNTRY_CURRENCY_MAP[res.data.country] || 'USD'
@@ -85,56 +138,78 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
             }
         } catch (e) {
             console.error(e);
+        } finally {
+            setPrefsLoaded(true);
         }
     };
 
-    const handleGenerate = async (force = false) => {
-        setLoading(true);
+    const handleGenerate = async (force = false, silent = false) => {
+        const reqId = ++requestSeqRef.current;
+        const hasExistingData = !!dataRef.current;
+        if (!silent) {
+            if (force && hasExistingData) {
+                setRefreshing(true);
+            } else {
+                setLoading(true);
+                if (hasExistingData) setRefreshing(true);
+            }
+        }
         setError(null);
+
         try {
             const url = force ? '/recommendations/insights?force_refresh=true' : '/recommendations/insights';
             const res = await api.post(url);
-            if (res.data && (res.data.picks || res.data.strategy)) {
-                setData(res.data);
-                // Update local usage state if success
+            if (reqId !== requestSeqRef.current) return;
+            const payload: AIUnifiedResponse | undefined = res.data;
+
+            if (payload && payload.warning === 'AI_QUOTA_EXCEEDED' && hasExistingData) {
+                setError("AI is experiencing high demand right now. Showing your previous results.");
+                return;
+            }
+
+            if (payload && (payload.picks || payload.strategy)) {
+                commitData(payload);
                 setLastAiUsage(new Date().toISOString());
-                // Save region to prevent re-generation on reload/reopen
-                const countrySaved = res.data.country || userCountry;
-                try {
-                    const existing: string[] = JSON.parse(localStorage.getItem('binge_ai_regions') || '[]');
-                    if (!existing.includes(countrySaved)) {
-                        localStorage.setItem('binge_ai_regions', JSON.stringify([...existing, countrySaved]));
-                    }
-                } catch { /* ignore */ }
-                localStorage.setItem('last_ai_region', countrySaved);
-            } else {
+                const countrySaved = payload.country || userCountry;
+                if (payload.warning !== 'AI_QUOTA_EXCEEDED') {
+                    writeLocalInsights(userIdRef.current, countrySaved, payload);
+                }
+            } else if (!hasExistingData) {
                 setError("AI returned incomplete data. Please try again.");
+            } else if (!silent) {
+                setError("Could not update insights right now. Showing your previous results.");
             }
         } catch (e: any) {
+            if (reqId !== requestSeqRef.current) return;
             console.error(e);
+            if (silent && hasExistingData) {
+                return;
+            }
             let msg = "Failed to generate insights. AI might be busy.";
 
-            // Extract Axios error message
             if (e.response && e.response.data && e.response.data.detail) {
                 msg = e.response.data.detail;
             } else if (e.message === "Network Error") {
                 msg = "Network Error: Please check if the backend is running.";
             } else if (e.message && e.message.includes("timeout")) {
-                msg = "AI Timeout: The engine is taking too long. Please try again in 1 minute.";
+                msg = "AI Timeout: The engine is taking too long. Showing previous results if available.";
             }
 
             setError(msg);
         } finally {
-            setLoading(false);
+            if (!silent && reqId === requestSeqRef.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
     };
 
     // Initial Load & Auto-Generate Logic
     useEffect(() => {
         if (isOpen) {
-            fetchPreferences();
-            // Reset auto-load state on open
+            setPrefsLoaded(false);
             autoLoadRef.current = false;
+            fetchPreferences();
         }
     }, [isOpen]);
 
@@ -149,24 +224,27 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
         }
     }, [isOpen]);
 
-
-
-    // Auto-Generate logic: Only if previously generated FOR THIS REGION or user explicitly clicked
+    // Auto-Load once preferences confirm the exact region:
+    // - If we already hydrated local/state cache for this region, sync quietly in background without spinner
+    // - Otherwise load from backend cache/AI if previously generated for this region
     useEffect(() => {
-        if (isOpen && aiAllowed && hasData && !autoLoadRef.current) {
+        if (isOpen && prefsLoaded && aiAllowed && hasData && !autoLoadRef.current) {
             let generatedRegions: string[] = [];
             try {
                 generatedRegions = JSON.parse(localStorage.getItem('binge_ai_regions') || '[]');
             } catch { /* ignore */ }
             const lastRegion = localStorage.getItem('last_ai_region');
+            const alreadyLoadedForRegion = !!dataRef.current && (!dataRef.current.country || dataRef.current.country === userCountry);
 
-            // Only auto-generate if we've successfully generated for THIS country before
-            if (generatedRegions.includes(userCountry) || lastRegion === userCountry) {
+            if (alreadyLoadedForRegion) {
                 autoLoadRef.current = true;
-                handleGenerate(false);
+                handleGenerate(false, true);
+            } else if (generatedRegions.includes(userCountry) || lastRegion === userCountry) {
+                autoLoadRef.current = true;
+                handleGenerate(false, false);
             }
         }
-    }, [isOpen, aiAllowed, hasData, userCountry]);
+    }, [isOpen, prefsLoaded, aiAllowed, hasData, userId, userCountry]);
 
     // ... imports at top should include getCurrencySymbol from currency.ts but let's just map locally for speed or import properly?
     // Let's assume we can add the import.
@@ -293,12 +371,12 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                             <button
                                 className={`${styles.tabBtn} ${styles.refreshTab}`}
                                 onClick={() => handleGenerate(true)}
-                                disabled={!hasData || loading}
-                                title={loading ? 'Analyzing Library...' : 'Refresh Intelligence'}
-                                style={{ opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                                disabled={!hasData || loading || refreshing}
+                                title={loading || refreshing ? 'Refreshing Intelligence...' : 'Refresh Intelligence'}
+                                style={{ opacity: loading || refreshing ? 0.7 : 1, cursor: loading || refreshing ? 'not-allowed' : 'pointer' }}
                             >
-                                <RefreshCw size={18} className={loading ? styles.spin : ''} />
-                                {loading && <span style={{ marginLeft: '6px', fontSize: '0.9rem' }}>Refreshing...</span>}
+                                <RefreshCw size={18} className={loading || refreshing ? styles.spin : ''} />
+                                {(loading || refreshing) && <span style={{ marginLeft: '6px', fontSize: '0.9rem' }}>Refreshing...</span>}
                             </button>
                             <Link
                                 href="/profile"
@@ -347,6 +425,13 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                     <div className={styles.warningState}>
                                         <AlertTriangle size={20} />
                                         <span>{data.warning}</span>
+                                    </div>
+                                )}
+
+                                {refreshing && data && (
+                                    <div className={styles.refreshingBanner}>
+                                        <RefreshCw size={15} className={styles.spin} />
+                                        <span>Refreshing insights... keeping your current results until ready.</span>
                                     </div>
                                 )}
 
@@ -408,15 +493,15 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                             </div>
                                         )}
 
-                                        {activeTab === 'picks' && loading && (
+                                        {activeTab === 'picks' && loading && !data && (
                                             <div className={styles.loadingWrapper} style={{ gridColumn: '1 / -1', minHeight: '300px' }}>
                                                 <RefreshCw className={styles.spin} size={48} color="#7c3aed" />
                                                 <p>Analyzing 28,000+ titles and your watchlist...</p>
                                             </div>
                                         )}
 
-                                        {activeTab === 'picks' && data && !loading && (
-                                            <>
+                                        {activeTab === 'picks' && data && (
+                                            <div className={`${styles.strategyWrapper} ${refreshing ? styles.strategyDimmed : ''}`}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
                                                     <h3 className={styles.sectionTitle}>Tap to Watch (On your services)</h3>
                                                 </div>
@@ -444,7 +529,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                             const existingItem = watchlist.find(w => w.tmdb_id === tmdbId || (w.tmdb_id === 0 && rec.title === 'Title needed'));
 
                                                             return (
-                                                                <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                                                                <div key={`${tmdbId || rec.title}-${idx}`} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
                                                                     <MediaCard
                                                                         item={{
                                                                             id: tmdbId,
@@ -457,7 +542,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                                             status: existingItem?.status,
                                                                             user_rating: existingItem?.user_rating || 0
                                                                         }}
-                                                                        showServiceBadge={getProviderBadge(rec.providers)}
+                                                                        showServiceBadge={rec.service || getProviderBadge(rec.providers)}
                                                                         customBadgeColor="#7c3aed"
                                                                         aiReason={rec.reason}
                                                                         existingStatus={existingItem?.status}
@@ -470,7 +555,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                         })}
                                                     </div>
                                                 )}
-                                            </>
+                                            </div>
                                         )}
 
 
@@ -483,7 +568,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                     </div>
                                                 )}
                                                 {data && (
-                                                    <div className={`${styles.strategyWrapper} ${loading ? styles.strategyDimmed : ''}`}>
+                                                    <div className={`${styles.strategyWrapper} ${(loading || refreshing) ? styles.strategyDimmed : ''}`}>
                                                         <div className={styles.strategyList}>
                                                             {data.strategy.map((item, idx) => (
                                                                 <div key={idx} className={styles.strategyCard}>
@@ -521,7 +606,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                                         const existingItem = watchlist.find(w => w.tmdb_id === tmdbId);
 
                                                                         return (
-                                                                            <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                                                                            <div key={`${tmdbId || gap.title}-${idx}`} style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
                                                                                 <MediaCard
                                                                                     item={{
                                                                                         id: tmdbId,
@@ -535,6 +620,7 @@ const AIInsightsModal: React.FC<AIInsightsModalProps> = ({ isOpen, onClose, watc
                                                                                         user_rating: existingItem?.user_rating || 0
                                                                                     }}
                                                                                     aiReason={gap.reason}
+                                                                                    showServiceBadge={getProviderBadge(gap.providers) || gap.service}
                                                                                     customBadgeColor="#f59e0b"
                                                                                     existingStatus={existingItem?.status}
                                                                                     onAddSuccess={onWatchlistUpdate}

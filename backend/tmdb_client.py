@@ -11,7 +11,7 @@ import time
 # Global Robust Session
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
-session.mount('https://', HTTPAdapter(max_retries=retries))
+session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=20))
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
@@ -98,59 +98,97 @@ def find_by_external_id(external_id: str, external_source: str = "imdb_id"):
         print(f"Error finding by external_id {external_id}: {e}")
     return {}
 
-from functools import lru_cache
+import threading
 
-@lru_cache(maxsize=128)
+_providers_cache: dict[tuple[str, int, str], tuple[float, dict, float]] = {}
+_providers_lock = threading.Lock()
+PROVIDERS_CACHE_MAX = 4096
+
 def get_watch_providers(media_type: str, tmdb_id: int, region: str = "US"):
     """
-    Fetch watch providers for a movie or TV show.
-    Defaults to US region.
+    Fetch watch providers for a movie or TV show with TTL caching.
+    Non-empty results are cached for 12 hours; clean empty results for 1 hour; network errors are not cached.
     """
-    if settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
+    if not settings.TMDB_API_KEY or settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
         return {}
+
+    region_code = (region or "US").upper()
+    cache_key = (media_type, int(tmdb_id), region_code)
+    now = time.time()
+
+    with _providers_lock:
+        entry = _providers_cache.get(cache_key)
+        if entry:
+            cached_at, cached_data, ttl = entry
+            if now - cached_at < ttl:
+                return cached_data
 
     url = f"{TMDB_BASE_URL}/{media_type}/{tmdb_id}/watch/providers"
     params = {"api_key": settings.TMDB_API_KEY}
-    
+
     headers = {
         "User-Agent": "SubscriptionManager/1.0",
         "Accept": "application/json"
     }
-    
+
     try:
-        # Use global session
         response = session.get(url, params=params, headers=headers, timeout=10, verify=False)
         response.raise_for_status()
         data = response.json()
-        # Return providers for the specified region or empty dict
-        return data.get("results", {}).get(region, {})
+        region_data = data.get("results", {}).get(region_code, {})
+        ttl = 3600 * 12 if region_data else 3600
+        with _providers_lock:
+            if len(_providers_cache) >= PROVIDERS_CACHE_MAX:
+                _providers_cache.pop(next(iter(_providers_cache)))
+            _providers_cache[cache_key] = (now, region_data, ttl)
+        return region_data
     except Exception as e:
-         print(f"Error fetching providers for {media_type}/{tmdb_id}: {e}")
-            
+        print(f"Error fetching providers for {media_type}/{tmdb_id}: {e}")
+
     return {}
 
 def get_similar(media_type: str, tmdb_id: int):
     """
     Fetch similar movies or TV shows for a given item.
     """
-    if settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
+    if not settings.TMDB_API_KEY or settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
         return {"results": []}
 
     url = f"{TMDB_BASE_URL}/{media_type}/{tmdb_id}/similar"
     params = {"api_key": settings.TMDB_API_KEY, "page": 1}
-    
+
     headers = {
         "User-Agent": "SubscriptionManager/1.0",
         "Accept": "application/json"
     }
     try:
-        # Use global session
         response = session.get(url, params=params, headers=headers, timeout=10, verify=False)
         response.raise_for_status()
-        data = response.json()
-        return data
+        return response.json()
     except Exception as e:
         print(f"Error fetching similar content for {media_type}/{tmdb_id}: {e}")
+        return {"results": []}
+
+def get_recommendations(media_type: str, tmdb_id: int):
+    """
+    Fetch TMDB collaborative recommendations for a movie or TV show (higher precision than /similar).
+    """
+    if not settings.TMDB_API_KEY or settings.TMDB_API_KEY == "YOUR_TMDB_API_KEY_HERE":
+        return {"results": []}
+
+    url = f"{TMDB_BASE_URL}/{media_type}/{tmdb_id}/recommendations"
+    params = {"api_key": settings.TMDB_API_KEY, "page": 1}
+
+    headers = {
+        "User-Agent": "SubscriptionManager/1.0",
+        "Accept": "application/json"
+    }
+    try:
+        response = session.get(url, params=params, headers=headers, timeout=10, verify=False)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching recommendations for {media_type}/{tmdb_id}: {e}")
         return {"results": []}
 
 def get_details(media_type: str, tmdb_id: int):

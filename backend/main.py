@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timedelta
-import models, schemas, crud, security, dependencies
+import models, schemas, crud, security, dependencies, provider_utils
 from database import SessionLocal, engine
 import traceback
 import time
@@ -85,6 +85,33 @@ def convert_to_usd(amount: float, currency_or_country: str) -> float:
         code = COUNTRY_CURRENCY_MAP.get(code, "USD")
     rate = CURRENCY_TO_USD_RATES.get(code, 1.0)
     return amount / rate
+
+def invalidate_insights_cache(db: Session, user_id: int, include_similar: bool = False):
+    """Invalidate cached Unified Insights (and optionally You Might Like) when user data changes."""
+    query = db.query(models.RecommendationCache).filter(
+        models.RecommendationCache.user_id == user_id
+    )
+    if include_similar:
+        query = query.filter(
+            (models.RecommendationCache.category.like("unified_insights_%")) |
+            (models.RecommendationCache.category.like("similar_%"))
+        )
+    else:
+        query = query.filter(models.RecommendationCache.category.like("unified_insights_%"))
+    query.delete(synchronize_session=False)
+    db.commit()
+
+def bg_refresh_recs(user_id: int):
+    try:
+        from database import SessionLocal
+        import recommendations
+        bg_db = SessionLocal()
+        try:
+            recommendations.refresh_recommendations(bg_db, user_id, force=True)
+        finally:
+            bg_db.close()
+    except Exception as e:
+        print(f"[BG_REFRESH] Error refreshing recommendations for user {user_id}: {e}")
 
 # --- Admin Panel Setup ---
 from sqladmin import Admin, ModelView
@@ -568,11 +595,12 @@ def update_profile(
                  pass
 
         # 2. Trigger background refresh to populate new cache (Region-keyed now, so no need to clear old)
-        import recommendations
-        background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+        background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     if update.preferences:
         crud.update_user_preferences(db, user_id=current_user.id, preferences=update.preferences)
+        invalidate_insights_cache(db, current_user.id, include_similar=True)
+        background_tasks.add_task(bg_refresh_recs, current_user.id)
         
     # Re-fetch user to ensure we return the latest state without "not persistent" errors
     # (CRUD commits expire the previous session objects)
@@ -697,9 +725,8 @@ def create_subscription(subscription: schemas.SubscriptionCreate, background_tas
     if service:
         sub.logo_url = service.logo_url
 
-    # Trigger background refresh
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    invalidate_insights_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return sub
 
@@ -726,10 +753,9 @@ def delete_subscription(subscription_id: int, background_tasks: BackgroundTasks,
     db_sub = crud.delete_subscription(db, subscription_id=subscription_id, user_id=current_user.id)
     if db_sub is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
-        
-    # Trigger background refresh
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, db, current_user.id, force=True)
+
+    invalidate_insights_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return db_sub
 
@@ -738,10 +764,9 @@ def update_subscription(subscription_id: int, subscription: schemas.Subscription
     db_sub = crud.update_subscription(db, subscription_id=subscription_id, subscription=subscription, user_id=current_user.id)
     if db_sub is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
-        
-    # Trigger background refresh
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, db, current_user.id, force=True)
+
+    invalidate_insights_cache(db, current_user.id)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return db_sub
 
@@ -755,8 +780,7 @@ def add_to_watchlist(
     new_item = crud.create_watchlist_item(db=db, item=item, user_id=current_user.id)
     
     # Trigger recommendation refresh to update "Unused Subs" and "Watch Now"
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return new_item
 
@@ -984,24 +1008,6 @@ def check_watch_availability(item_ids: list[int], background_tasks: BackgroundTa
         models.Subscription.country == (current_user.country or "US")
     ).all()
     
-    # Robust Provider Map
-    PROVIDER_IDS_MAP = {
-        "netflix": "8",
-        "hulu": "15", 
-        "amazon prime video": "9",
-        "disney plus": "337",
-        "max": "384|312",
-        "peacock": "386",
-        "apple tv plus": "350",
-        "apple tv+": "350",  # Added exact match for DB Name
-        "paramount plus": "83|531",
-        "crunchyroll": "283",
-        "hotstar": "122",
-        "disney+ hotstar": "122",
-        "jiocinema": "220",
-        "jiohotstar": "122|220"
-    }
-    
     availability_map = {}
     
     # Fetch actual watchlist items from the provided IDs
@@ -1022,30 +1028,15 @@ def check_watch_availability(item_ids: list[int], background_tasks: BackgroundTa
             
             if "flatrate" in providers:
                 for p in providers["flatrate"]:
-                    p_name = p["provider_name"]
-                    p_id = str(p["provider_id"])
+                    p_name = p.get("provider_name", "")
+                    p_id = p.get("provider_id")
                     
                     for sub in subs:
-                        # 1. ID Match
-                        s_key = sub.service_name.lower()
-                        mapped_ids = []
-                        if s_key in PROVIDER_IDS_MAP:
-                            mapped_ids = PROVIDER_IDS_MAP[s_key].split("|")
-                        else:
-                            for k, v in PROVIDER_IDS_MAP.items():
-                                if k in s_key or s_key in k:
-                                    mapped_ids = v.split("|")
-                                    break
-                        
-                        if p_id in mapped_ids:
+                        if provider_utils.match_provider_to_service(p_id, p_name, sub.service_name):
                             matched_sub = sub.service_name
                             break
-                        
-                        # 2. Name Match
-                        if sub.service_name.lower() in p_name.lower() or p_name.lower() in sub.service_name.lower():
-                            matched_sub = sub.service_name
-                            break
-                    if matched_sub: break
+                    if matched_sub:
+                        break
             
             if matched_sub:
                 return item.tmdb_id, matched_sub
@@ -1077,8 +1068,7 @@ def check_watch_availability(item_ids: list[int], background_tasks: BackgroundTa
     print(f"DEBUG: Availability check took {time.time() - start_time:.2f}s for {len(items)} items")
             
     # Trigger refresh since availability changed (affecting "Unused Subs")
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return availability_map
 
@@ -1094,22 +1084,9 @@ def delete_watchlist_item(
         raise HTTPException(status_code=404, detail="Item not found")
         
     # Trigger refresh
-    import recommendations
-    background_tasks.add_task(recommendations.refresh_recommendations, SessionLocal(), current_user.id, force=True)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
     
     return db_item
-
-def bg_refresh_recs(user_id: int):
-    try:
-        from database import SessionLocal
-        import recommendations
-        bg_db = SessionLocal()
-        try:
-            recommendations.refresh_recommendations(bg_db, user_id, force=True)
-        finally:
-            bg_db.close()
-    except Exception as e:
-        print(f"[BG_REFRESH] Error refreshing recommendations for user {user_id}: {e}")
 
 @app.put("/watchlist/{item_id}", response_model=schemas.WatchlistItem)
 def update_watchlist_item_generic(
@@ -1267,6 +1244,13 @@ def enrich_strategy_items(strategy_list: list, user_subscriptions: list) -> list
                 if sub_clean and (target_clean in sub_clean or sub_clean in target_clean):
                     matched_sub = sub
                     break
+
+        # 3. Provider alias fallback (e.g. 'Max' <-> 'HBO Max', 'JioHotstar' <-> 'Hotstar')
+        if not matched_sub:
+            for sub in user_subscriptions:
+                if provider_utils.match_provider_to_service(None, service_name, sub.service_name):
+                    matched_sub = sub
+                    break
                     
         if strat.get("action") == "Cancel":
             # If the user does not have this subscription in this country profile, discard it!
@@ -1279,8 +1263,14 @@ def enrich_strategy_items(strategy_list: list, user_subscriptions: list) -> list
             strat["billing_cycle"] = "yearly" if is_yearly else "monthly"
             if strat.get("action") == "Cancel" and matched_sub.cost:
                 strat["savings"] = matched_sub.cost
-            if is_yearly and strat.get("reason"):
-                strat["reason"] = re.sub(r'\bmonthly\b', 'annual', strat["reason"], flags=re.IGNORECASE)
+            if is_yearly and strat.get("reason") and matched_sub.cost:
+                cost_str = str(int(matched_sub.cost)) if float(matched_sub.cost).is_integer() else str(matched_sub.cost)
+                strat["reason"] = re.sub(
+                    rf'(\b{re.escape(cost_str)}(?:\.0+)?\s*)(?:per\s+month|/mo\b|monthly)',
+                    r'\1annual',
+                    strat["reason"],
+                    flags=re.IGNORECASE,
+                )
 
         valid_strategies.append(strat)
 
@@ -1307,7 +1297,7 @@ def get_unified_insights(
          # Using a distinct category for this unified blob, now keyed by country
          cache_key = f"unified_insights_{country}"
          print(f"DEBUG: Checking cache for user {current_user.id} with key: {cache_key}")
-         cached = recommendations.get_cached_data(db, user_id=current_user.id, category=cache_key)
+         cached = recommendations.get_cached_data_with_ttl(db, user_id=current_user.id, category=cache_key, ttl_hours=168)
          
          if cached:
              print(f"DEBUG: Cache HIT for {cache_key}. Keys: {cached.keys()}")
@@ -1322,11 +1312,9 @@ def get_unified_insights(
                      if pick.get('tmdb_id') and pick.get('tmdb_id') != 0 and pick.get('poster_path'):
                          valid_picks.append(pick)
              
-             # If we have at least some valid picks OR valid strategy, return cached
-             has_picks = len(valid_picks) > 0
-             has_strategy = cached.get('strategy') and len(cached.get('strategy')) > 0
-             
-             if has_picks or has_strategy:
+             # Require at least 4 valid picks under normal operation so thin partial caches auto-refresh
+             has_picks = len(valid_picks) >= 4
+             if has_picks:
                  cached['picks'] = valid_picks
                  
                  # Enrich Strategy Items in Cache Hit
@@ -1453,8 +1441,31 @@ def get_unified_insights(
 
     
     # Determine Currency
-    currency = get_country_currency(current_user.country)
+    currency = get_country_currency(country)
+
+    # Compute deterministic watchlist coverage & gap metrics so AI advice matches Coverage Dashboard
+    coverage_report = provider_utils.calculate_coverage_report(db, subs, watchlist, country, convert_to_usd)
+    coverage_summary = {
+        "total_monthly_cost": coverage_report["summary"]["total_monthly_cost"],
+        "active_sub_coverage": coverage_report.get("_active_queue_counts", {}),
+        "top_unsubscribed_services": coverage_report.get("suggested_services", []),
+    }
     
+    watchlist_seeds = [
+        {
+            "tmdb_id": w.tmdb_id,
+            "media_type": w.media_type,
+            "title": w.title,
+            "rating": w.user_rating,
+            "vote_average": w.vote_average,
+            "status": w.status,
+            "genre_ids": w.genre_ids,
+            "original_language": w.original_language,
+        }
+        for w in watchlist
+        if (w.status or "").lower() != "dropped" and (not w.user_rating or w.user_rating >= 6)
+    ]
+
     # Generate
     try:
         from google.api_core.exceptions import ResourceExhausted
@@ -1468,8 +1479,10 @@ def get_unified_insights(
             ignored_titles=ignored_titles,
             ignored_ids={pid for pid, count in ignored_counts.items() if count >= 2},
             watchlist_ids=watchlist_ids,
-            country=current_user.country,
-            currency=currency
+            country=country,
+            currency=currency,
+            coverage_summary=coverage_summary,
+            watchlist_seeds=watchlist_seeds,
         )
 
     except Exception as e:
@@ -1530,13 +1543,12 @@ def get_subscription_coverage(
     current_user: models.User = Depends(dependencies.get_current_user)
 ):
     """
-    Returns a deterministic coverage breakdown of how well the user's active OTT
-    subscriptions cover their watchlist. No AI, no external API calls.
-    Uses cached available_on field + type-aware hour heuristics.
+    Returns an accurate coverage breakdown of how well the user's active OTT
+    subscriptions cover their watchlist, using multi-provider TMDB flatrate data,
+    excluding dropped titles from utility and excluding watched items from suggestions.
     """
     country = current_user.country or "US"
 
-    # --- Fetch Data ---
     subs = db.query(models.Subscription).filter(
         models.Subscription.user_id == current_user.id,
         models.Subscription.is_active == True,
@@ -1548,7 +1560,6 @@ def get_subscription_coverage(
         models.WatchlistItem.user_id == current_user.id
     ).all()
 
-    # Attach logos to subs
     for sub in subs:
         service = db.query(models.Service).filter(
             models.Service.name == sub.service_name,
@@ -1557,279 +1568,9 @@ def get_subscription_coverage(
         if service:
             sub.logo_url = service.logo_url
 
-    total_watchlist = len(watchlist)
-
-    # --- Content Classification ---
-    def classify_item(item) -> str:
-        genre_ids = item.genre_ids or ""
-        is_animation = "16" in genre_ids
-        is_japanese = item.original_language == "ja"
-        if item.media_type == "movie":
-            return "movie"
-        elif is_japanese and is_animation:
-            return "anime"
-        elif item.media_type == "tv":
-            return "tv"
-        else:
-            return "other"
-
-    # --- Hour Estimation ---
-    AVG_EPISODE_DURATION = {"movie": 120, "tv": 42, "anime": 22, "other": 42}
-    DEFAULT_SERIES_EPISODES = {"tv": 40, "anime": 26, "other": 20}
-
-    def estimate_hours(item, content_type: str) -> float:
-        if content_type == "movie":
-            return round(AVG_EPISODE_DURATION["movie"] / 60, 1)
-        eps = item.total_episodes or 0
-        seasons = item.total_seasons or 0
-        if eps > 0:
-            episode_count = eps
-        elif seasons > 0:
-            episode_count = seasons * 12
-        else:
-            episode_count = DEFAULT_SERIES_EPISODES.get(content_type, 20)
-        return round((episode_count * AVG_EPISODE_DURATION[content_type]) / 60, 1)
-
-    # Pre-classify all watchlist items
-    classified = {}
-    for item in watchlist:
-        ct = classify_item(item)
-        hrs = estimate_hours(item, ct)
-        classified[item.id] = {"type": ct, "hours": hrs}
-
-    # --- Per-Service Coverage Breakdown ---
-    def get_monthly_cost(sub) -> float:
-        cost = sub.cost or 0.0
-        if sub.billing_cycle and sub.billing_cycle.lower() == "yearly":
-            return round(cost / 12, 2)
-        return cost
-
-    services_data = []
-
-    for sub in subs:
-        monthly_cost = get_monthly_cost(sub)
-        breakdown = {
-            "movie":  {"count": 0, "est_hours": 0.0},
-            "tv":     {"count": 0, "est_hours": 0.0},
-            "anime":  {"count": 0, "est_hours": 0.0},
-            "other":  {"count": 0, "est_hours": 0.0},
-        }
-
-        for item in watchlist:
-            if not item.available_on:
-                continue
-            # Fuzzy match: service name contained in available_on or vice versa
-            if (sub.service_name.lower() in item.available_on.lower() or
-                    item.available_on.lower() in sub.service_name.lower()):
-                ct = classified[item.id]["type"]
-                hrs = classified[item.id]["hours"]
-                breakdown[ct]["count"] += 1
-                breakdown[ct]["est_hours"] = round(breakdown[ct]["est_hours"] + hrs, 1)
-
-        total_covered = sum(v["count"] for v in breakdown.values())
-        total_hours = round(sum(v["est_hours"] for v in breakdown.values()), 1)
-        coverage_pct = round((total_covered / total_watchlist * 100) if total_watchlist > 0 else 0)
-        type_count = sum(1 for v in breakdown.values() if v["count"] > 0)
-
-        # Value Score: hours-primary, coverage secondary, capped at 100
-        # Hours are the real measure of entertainment value — cap at 300h
-        hour_score = min((total_hours / 300) * 55, 55)
-        # Coverage % is secondary — max 25 pts (100% coverage = 25 pts)
-        title_score = min(coverage_pct * 0.25, 25)
-        # Variety bonus for services spanning multiple content types
-        variety_bonus = 20 if type_count >= 2 else 0
-        raw_utility = hour_score + title_score + variety_bonus  # max = 100
-
-        cost_usd = convert_to_usd(monthly_cost, country)
-        cost_penalty = min(cost_usd * 1.5, 20.0)
-
-        value_score = round(max(10, raw_utility - cost_penalty))
-
-        cost_per_title = round(monthly_cost / total_covered, 2) if total_covered > 0 else None
-        cost_per_hour = round(monthly_cost / total_hours, 2) if total_hours > 0 else None
-
-        services_data.append({
-            "name": sub.service_name,
-            "cost": sub.cost or 0.0,
-            "billing_cycle": sub.billing_cycle,
-            "logo_url": getattr(sub, "logo_url", None),
-            "coverage_pct": coverage_pct,
-            "value_score": value_score,
-            "type_count": type_count,
-            "breakdown": breakdown,
-            "total_covered": total_covered,
-            "total_hours": total_hours,
-            "cost_per_title": cost_per_title,
-            "cost_per_hour": cost_per_hour,
-        })
-
-    # Sort by value_score descending
-    services_data.sort(key=lambda s: s["value_score"], reverse=True)
-
-    # --- Orphaned Titles (no available_on or no matching subscription) ---
-    sub_names_lower = {s.service_name.lower() for s in subs}
-
-    def is_covered_by_any_sub(item) -> bool:
-        if not item.available_on:
-            return False
-        a = item.available_on.lower()
-        return any(sn in a or a in sn for sn in sub_names_lower)
-
-    orphaned = []
-    for item in watchlist:
-        if not is_covered_by_any_sub(item):
-            ct = classified[item.id]["type"]
-            # If available_on points to a service the user doesn't have, surface it as a suggestion
-            suggested_service = None
-            if item.available_on:
-                suggested_service = item.available_on  # e.g. "Apple TV+" - user doesn't have it
-            orphaned.append({
-                "tmdb_id": item.tmdb_id,
-                "dbId": item.id,
-                "title": item.title,
-                "media_type": item.media_type,
-                "poster_path": item.poster_path,
-                "vote_average": item.vote_average,
-                "overview": item.overview,
-                "status": item.status,
-                "est_hours": classified[item.id]["hours"],
-                "content_type": ct,
-                "suggested_service": suggested_service,
-                "original_language": item.original_language,
-                "genre_ids": item.genre_ids,
-            })
-
-    # --- Suggested Services (unsubscribed services covering watchlist items) ---
-    # Build a map: service_name -> { count, hours, titles, types, breakdown }
-    from collections import defaultdict
-    suggested_map = defaultdict(lambda: {
-        "count": 0, "hours": 0.0, "titles": [], "types": set(),
-        "breakdown": {
-            "movie": {"count": 0, "est_hours": 0.0},
-            "tv":    {"count": 0, "est_hours": 0.0},
-            "anime": {"count": 0, "est_hours": 0.0},
-            "other": {"count": 0, "est_hours": 0.0},
-        }
-    })
-
-    subscribed_names_lower = {s.service_name.lower() for s in subs}
-
-    for item in watchlist:
-        if not item.available_on:
-            continue
-        raw_services = [s.strip() for s in item.available_on.split(",") if s.strip()]
-        for svc_name in raw_services:
-            svc_lower = svc_name.lower()
-            if any(sub_n in svc_lower or svc_lower in sub_n for sub_n in subscribed_names_lower):
-                continue
-            ct = classified[item.id]["type"]
-            hrs = classified[item.id]["hours"]
-            suggested_map[svc_name]["count"] += 1
-            suggested_map[svc_name]["hours"] = round(suggested_map[svc_name]["hours"] + hrs, 1)
-            suggested_map[svc_name]["types"].add(ct)
-            suggested_map[svc_name]["breakdown"][ct]["count"] += 1
-            suggested_map[svc_name]["breakdown"][ct]["est_hours"] = round(
-                suggested_map[svc_name]["breakdown"][ct]["est_hours"] + hrs, 1
-            )
-            if item.title not in suggested_map[svc_name]["titles"]:
-                suggested_map[svc_name]["titles"].append(item.title)
-
-    # Fetch logos and cheapest plan for suggested services
-    suggested_services = []
-    for svc_name, info in sorted(suggested_map.items(), key=lambda x: -x[1]["count"]):
-        if info["count"] < 1:
-            continue
-        logo_url = None
-        cheapest_plan = None
-        service_record = db.query(models.Service).filter(
-            models.Service.name == svc_name,
-        ).order_by(
-            # Prefer exact country match
-            desc(models.Service.country == country)
-        ).first()
-        if service_record:
-            logo_url = service_record.logo_url
-            # Find the cheapest monthly-equivalent plan for this service in user's country
-            plans = db.query(models.Plan).filter(
-                models.Plan.service_id == service_record.id,
-                models.Plan.country == country,
-            ).all()
-            if not plans:
-                # Fallback to any country
-                plans = db.query(models.Plan).filter(
-                    models.Plan.service_id == service_record.id,
-                ).all()
-            if plans:
-                def monthly_equiv(p):
-                    return p.cost / 12 if p.billing_cycle and p.billing_cycle.lower() == "yearly" else p.cost
-                best = min(plans, key=monthly_equiv)
-                cheapest_plan = {
-                    "cost": best.cost,
-                    "currency": best.currency,
-                    "billing_cycle": best.billing_cycle,
-                }
-
-        # Compute projected value score using same formula as active subscriptions
-        s_coverage_pct = round((info["count"] / total_watchlist * 100) if total_watchlist > 0 else 0)
-        s_total_hours = info["hours"]
-        s_type_count = len(info["types"])
-        s_hour_score = min((s_total_hours / 300) * 55, 55)
-        s_title_score = min(s_coverage_pct * 0.25, 25)
-        s_variety_bonus = 20 if s_type_count >= 2 else 0
-        s_raw_utility = s_hour_score + s_title_score + s_variety_bonus
-        s_monthly_cost = 0.0
-        if cheapest_plan:
-            s_monthly_cost = (cheapest_plan["cost"] / 12
-                              if cheapest_plan["billing_cycle"] and cheapest_plan["billing_cycle"].lower() == "yearly"
-                              else cheapest_plan["cost"])
-        s_cost_usd = convert_to_usd(s_monthly_cost, country)
-        s_cost_penalty = min(s_cost_usd * 1.5, 20.0)
-        s_value_score = round(max(10, s_raw_utility - s_cost_penalty))
-        s_cost_per_title = round(s_monthly_cost / info["count"], 2) if info["count"] > 0 and s_monthly_cost > 0 else None
-        s_cost_per_hour = round(s_monthly_cost / s_total_hours, 2) if s_total_hours > 0 and s_monthly_cost > 0 else None
-
-        suggested_services.append({
-            "name": svc_name,
-            "logo_url": logo_url,
-            "count": info["count"],
-            "est_hours": info["hours"],
-            "coverage_pct": s_coverage_pct,
-            "breakdown": info["breakdown"],
-            "titles": info["titles"][:5],
-            "cheapest_plan": cheapest_plan,
-            "value_score": s_value_score,
-            "cost_per_title": s_cost_per_title,
-            "cost_per_hour": s_cost_per_hour,
-        })
-
-    # --- Summary ---
-    total_monthly_cost = round(sum(get_monthly_cost(s) for s in subs), 2)
-    total_covered = sum(
-        1 for item in watchlist if is_covered_by_any_sub(item)
-    )
-    total_covered_hours = round(sum(
-        classified[item.id]["hours"]
-        for item in watchlist if is_covered_by_any_sub(item)
-    ), 1)
-    overall_pct = round((total_covered / total_watchlist * 100) if total_watchlist > 0 else 0)
-
-    most_valuable = services_data[0]["name"] if services_data else None
-    least_used = min(services_data, key=lambda s: s["total_covered"])["name"] if services_data else None
-
-    return {
-        "services": services_data,
-        "orphaned_items": orphaned,
-        "suggested_services": suggested_services,
-        "summary": {
-            "total_monthly_cost": total_monthly_cost,
-            "total_covered": total_covered,
-            "total_watchlist": total_watchlist,
-            "overall_coverage_pct": overall_pct,
-            "total_covered_hours": total_covered_hours,
-            "most_valuable_service": most_valuable,
-            "least_used_service": least_used,
-        }
-    }
+    report = provider_utils.calculate_coverage_report(db, subs, watchlist, country, convert_to_usd)
+    report.pop("_active_queue_counts", None)
+    return report
 
 
 @app.get("/services/", response_model=list[schemas.Service])
@@ -1847,8 +1588,11 @@ def update_user_me(country: str, db: Session = Depends(get_db), current_user: mo
     return crud.update_user_profile(db, user_id=current_user.id, country=country)
 
 @app.put("/users/me/preferences", response_model=schemas.User)
-def update_user_preferences(preferences: schemas.UserPreferences, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
-    return crud.update_user_preferences(db, user_id=current_user.id, preferences=preferences)
+def update_user_preferences(preferences: schemas.UserPreferences, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
+    updated = crud.update_user_preferences(db, user_id=current_user.id, preferences=preferences)
+    invalidate_insights_cache(db, current_user.id, include_similar=True)
+    background_tasks.add_task(bg_refresh_recs, current_user.id)
+    return updated
 
 @app.get("/media/{media_type}/{tmdb_id}/providers")
 def get_media_providers(media_type: str, tmdb_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(dependencies.get_current_user)):
