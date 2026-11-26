@@ -31,32 +31,54 @@ export default function DashboardLayout({
     }, [theme]);
 
     useEffect(() => {
-        const fetchCountry = async () => {
+        const getDefaultDesktopCollapsed = () => {
             try {
-                const api = (await import('@/lib/api')).default;
-                const response = await api.get('/users/me/');
-                setCountry(response.data.country || 'US');
-            } catch (error) {
-                console.error('Failed to fetch country', error);
-            }
-        };
-        fetchCountry();
-
-        const getSavedDesktopCollapsed = () => {
-            try {
-                const saved = localStorage.getItem('sidebar_collapsed');
+                const saved = localStorage.getItem('bingesensei_default_sidebar_collapsed');
                 return saved === null ? true : saved === 'true';
             } catch {
                 return true;
             }
         };
 
-        // Auto-collapse on mobile; restore saved desktop preference (default collapsed)
+        const fetchCountryAndSidebarPref = async () => {
+            try {
+                const api = (await import('@/lib/api')).default;
+                const response = await api.get('/users/me/');
+                setCountry(response.data.country || 'US');
+
+                let defaultCollapsed = true;
+                if (response.data?.preferences) {
+                    try {
+                        const parsed = JSON.parse(response.data.preferences);
+                        if (typeof parsed.default_sidebar_collapsed === 'boolean') {
+                            defaultCollapsed = parsed.default_sidebar_collapsed;
+                        }
+                    } catch {}
+                }
+                try {
+                    localStorage.setItem('bingesensei_default_sidebar_collapsed', String(defaultCollapsed));
+                } catch {}
+
+                if (window.innerWidth >= 768) {
+                    setIsCollapsed(defaultCollapsed);
+                }
+            } catch (error) {
+                console.error('Failed to fetch user profile', error);
+            }
+        };
+        fetchCountryAndSidebarPref();
+
+        // Clean up legacy per-toggle key so saved default governs fresh loads
+        try {
+            localStorage.removeItem('sidebar_collapsed');
+        } catch {}
+
+        // Auto-collapse on mobile; apply saved default on desktop
         const handleResize = () => {
             if (window.innerWidth < 768) {
                 setIsCollapsed(true);
             } else {
-                setIsCollapsed(getSavedDesktopCollapsed());
+                setIsCollapsed(getDefaultDesktopCollapsed());
             }
         };
 
@@ -68,15 +90,7 @@ export default function DashboardLayout({
     }, []);
 
     const handleToggleSidebar = () => {
-        setIsCollapsed((prev) => {
-            const next = !prev;
-            if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-                try {
-                    localStorage.setItem('sidebar_collapsed', String(next));
-                } catch {}
-            }
-            return next;
-        });
+        setIsCollapsed((prev) => !prev);
     };
 
     const getFlag = (code: string) => {

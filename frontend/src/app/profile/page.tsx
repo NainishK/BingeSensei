@@ -6,7 +6,7 @@ import Link from 'next/link';
 import styles from './profile.module.css';
 import {
     ArrowLeft, CheckCircle, AlertCircle, Save, Download,
-    User, Settings, Users, Clock, Globe, Monitor, Ban, Radio, Bell, Wallet
+    User, Settings, Users, Clock, Globe, Monitor, Ban, Radio, Bell, Wallet, Compass
 } from 'lucide-react';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import ImportExportModal from '@/components/ImportExportModal';
@@ -37,6 +37,8 @@ interface UserPreferences {
     notify_movie_streaming?: boolean;
     auto_follow_watching?: boolean;
     viewing_preference?: 'weekly' | 'binge';
+    default_landing_page?: 'auto' | 'explore' | 'watchlist' | 'overview' | 'subscriptions' | 'calendar';
+    default_sidebar_collapsed?: boolean;
     [key: string]: unknown;
 }
 
@@ -66,6 +68,8 @@ export default function Profile() {
         notify_movie_streaming: true,
         auto_follow_watching: true,
         viewing_preference: 'weekly',
+        default_landing_page: 'auto',
+        default_sidebar_collapsed: true,
     });
     const [savingPrefs, setSavingPrefs] = useState(false);
     const [prefsMessage, setPrefsMessage] = useState('');
@@ -95,6 +99,8 @@ export default function Profile() {
                     if (parsed.notify_watched_resurrect === undefined) parsed.notify_watched_resurrect = true;
                     if (parsed.notify_movie_streaming === undefined) parsed.notify_movie_streaming = true;
                     if (parsed.auto_follow_watching === undefined) parsed.auto_follow_watching = true;
+                    if (parsed.default_sidebar_collapsed === undefined) parsed.default_sidebar_collapsed = true;
+                    localStorage.setItem('bingesensei_default_sidebar_collapsed', String(parsed.default_sidebar_collapsed));
                     if (parsed.viewing_style === 'Binge Watcher') {
                         parsed.viewing_preference = 'binge';
                     } else if (!parsed.viewing_preference) {
@@ -142,6 +148,7 @@ export default function Profile() {
             await api.put('/users/me/preferences', preferences);
             // Invalidate activity drops and watchlist cache so changes reflect immediately
             localStorage.removeItem('binge_watchlist_cache');
+            localStorage.setItem('bingesensei_default_sidebar_collapsed', String(preferences.default_sidebar_collapsed ?? true));
             setPrefsMessage('Preferences saved!');
             setTimeout(() => setPrefsMessage(''), 3000);
         } catch {
@@ -491,6 +498,56 @@ export default function Profile() {
                                                     type="checkbox"
                                                     checked={preferences.auto_follow_watching ?? true}
                                                     onChange={e => setPreferences({ ...preferences, auto_follow_watching: e.target.checked })}
+                                                    className={styles.hiddenCheckbox}
+                                                />
+                                                <span className={styles.switchThumb} />
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Startup Page Setting */}
+                                <div className={styles.settingsSection}>
+                                    <div className={styles.settingsSectionHeader}>
+                                        <h3 className={styles.settingsSectionTitle}>
+                                            <span className={styles.radarIconAccent}><Compass size={16} /></span>
+                                            Default Startup Page
+                                        </h3>
+                                        <p className={styles.settingsSectionDesc}>
+                                            Choose which page opens automatically when you log in.
+                                        </p>
+                                    </div>
+                                    <div className={styles.inputGroup}>
+                                        <CustomSelect
+                                            value={preferences.default_landing_page || 'auto'}
+                                            options={[
+                                                { value: 'auto', label: 'Smart Default (Explore when Watchlist is empty, else Watchlist)' },
+                                                { value: 'explore', label: 'Explore' },
+                                                { value: 'watchlist', label: 'Watchlist' },
+                                                { value: 'overview', label: 'Overview' },
+                                                { value: 'subscriptions', label: 'Subscriptions' },
+                                                { value: 'calendar', label: 'Calendar' }
+                                            ]}
+                                            onChange={(val) => setPreferences({
+                                                ...preferences,
+                                                default_landing_page: val as UserPreferences['default_landing_page']
+                                            })}
+                                            className={styles.select}
+                                        />
+                                    </div>
+                                    <div className={styles.switchGroup}>
+                                        <label className={styles.switchRow}>
+                                            <div className={styles.switchTextWrapper}>
+                                                <span className={styles.switchTitle}>Keep Sidebar Collapsed by Default</span>
+                                                <span className={styles.switchDescription}>
+                                                    Start desktop views with the compact icon sidebar (you can still expand or collapse it anytime).
+                                                </span>
+                                            </div>
+                                            <div className={`${styles.switchTrack} ${(preferences.default_sidebar_collapsed ?? true) ? styles.switchTrackActive : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={preferences.default_sidebar_collapsed ?? true}
+                                                    onChange={e => setPreferences({ ...preferences, default_sidebar_collapsed: e.target.checked })}
                                                     className={styles.hiddenCheckbox}
                                                 />
                                                 <span className={styles.switchThumb} />

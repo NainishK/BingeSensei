@@ -87,6 +87,80 @@ function CustomFilterDropdown({
     );
 }
 
+function SlidingFilterPills({
+    value,
+    onChange,
+    options
+}: {
+    value: 'all' | 'subscriptions' | 'explore';
+    onChange: (val: 'all' | 'subscriptions' | 'explore') => void;
+    options: FilterOption[];
+}) {
+    const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const [pillStyle, setPillStyle] = useState<{ left: number; top: number; width: number; height: number; opacity: number }>({
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        opacity: 0,
+    });
+
+    const countSignature = options.map((o) => `${o.value}:${o.count}`).join(',');
+
+    useEffect(() => {
+        const updateIndicator = () => {
+            const activeBtn = btnRefs.current[value];
+            if (activeBtn && activeBtn.offsetWidth > 0) {
+                setPillStyle({
+                    left: activeBtn.offsetLeft,
+                    top: activeBtn.offsetTop,
+                    width: activeBtn.offsetWidth,
+                    height: activeBtn.offsetHeight,
+                    opacity: 1,
+                });
+            }
+        };
+
+        const rafId = requestAnimationFrame(updateIndicator);
+        window.addEventListener('resize', updateIndicator);
+        return () => {
+            cancelAnimationFrame(rafId);
+            window.removeEventListener('resize', updateIndicator);
+        };
+    }, [value, countSignature]);
+
+    return (
+        <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`}>
+            <span
+                aria-hidden="true"
+                className={styles.filterPillIndicator}
+                style={{
+                    transform: `translate3d(${pillStyle.left}px, ${pillStyle.top}px, 0)`,
+                    width: pillStyle.width ? `${pillStyle.width}px` : undefined,
+                    height: pillStyle.height ? `${pillStyle.height}px` : undefined,
+                    opacity: pillStyle.opacity,
+                }}
+            />
+            {options.map((opt) => {
+                const isActive = opt.value === value;
+                return (
+                    <button
+                        key={opt.value}
+                        ref={(el) => { btnRefs.current[opt.value] = el; }}
+                        type="button"
+                        className={`${styles.filterPill} ${isActive ? styles.filterPillActive : ''}`}
+                        onClick={() => onChange(opt.value)}
+                    >
+                        {opt.icon}
+                        <span className={styles.pillLabel}>{opt.label}</span>
+                        <span className={styles.pillCount}>{opt.count}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function RecommendationsPage() {
     // ... existing hooks
     const {
@@ -598,32 +672,33 @@ export default function RecommendationsPage() {
                         <div className={styles.heroTopBar} data-interactive="true">
                             <div className={styles.heroTopBarLeft}>
                                 {/* Desktop Filter Pills */}
-                                <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`}>
-                                    <button
-                                        className={`${styles.filterPill} ${trendingTab === 'all' ? styles.filterPillActive : ''}`}
-                                        onClick={() => { setTrendingTab('all'); setHeroIndex(0); }}
-                                    >
-                                        <span className={styles.iconRecsAll}><Layers size={13} /></span>
-                                        <span className={styles.pillLabel}>All Trending</span>
-                                        <span className={styles.pillCount}>{trendingRecs.length}</span>
-                                    </button>
-                                    <button
-                                        className={`${styles.filterPill} ${trendingTab === 'subscriptions' ? styles.filterPillActive : ''}`}
-                                        onClick={() => { setTrendingTab('subscriptions'); setHeroIndex(0); }}
-                                    >
-                                        <span className={styles.iconRecsSubs}><Tv size={13} /></span>
-                                        <span className={styles.pillLabel}>On My Subscriptions</span>
-                                        <span className={styles.pillCount}>{trendingSubCount}</span>
-                                    </button>
-                                    <button
-                                        className={`${styles.filterPill} ${trendingTab === 'explore' ? styles.filterPillActive : ''}`}
-                                        onClick={() => { setTrendingTab('explore'); setHeroIndex(0); }}
-                                    >
-                                        <span className={styles.iconRecsExplore}><Globe size={13} /></span>
-                                        <span className={styles.pillLabel}>Worldwide & Explore</span>
-                                        <span className={styles.pillCount}>{trendingExploreCount}</span>
-                                    </button>
-                                </div>
+                                <SlidingFilterPills
+                                    value={trendingTab}
+                                    onChange={(val) => {
+                                        setTrendingTab(val);
+                                        setHeroIndex(0);
+                                    }}
+                                    options={[
+                                        {
+                                            value: 'all',
+                                            label: 'All Trending',
+                                            count: trendingRecs.length,
+                                            icon: <span className={styles.iconRecsAll}><Layers size={13} /></span>
+                                        },
+                                        {
+                                            value: 'subscriptions',
+                                            label: 'On My Subscriptions',
+                                            count: trendingSubCount,
+                                            icon: <span className={styles.iconRecsSubs}><Tv size={13} /></span>
+                                        },
+                                        {
+                                            value: 'explore',
+                                            label: 'Worldwide & Explore',
+                                            count: trendingExploreCount,
+                                            icon: <span className={styles.iconRecsExplore}><Globe size={13} /></span>
+                                        },
+                                    ]}
+                                />
 
                                 {/* Mobile Filter Dropdown */}
                                 <div className={styles.mobileFilterDropdownWrapper}>
@@ -827,32 +902,30 @@ export default function RecommendationsPage() {
                                     />
 
                                     {/* Desktop Filter Pills */}
-                                    <div className={`${styles.filterPills} ${styles.filterPillsDesktop}`}>
-                                        <button
-                                            className={`${styles.filterPill} ${filterTab === 'all' ? styles.filterPillActive : ''}`}
-                                            onClick={() => setFilterTab('all')}
-                                        >
-                                            <span className={styles.iconRecsAll}><Layers size={14} /></span>
-                                            <span className={styles.pillLabel}>All Picks</span>
-                                            <span className={styles.pillCount}>{similarRecs.length}</span>
-                                        </button>
-                                        <button
-                                            className={`${styles.filterPill} ${filterTab === 'subscriptions' ? styles.filterPillActive : ''}`}
-                                            onClick={() => setFilterTab('subscriptions')}
-                                        >
-                                            <span className={styles.iconRecsSubs}><Tv size={14} /></span>
-                                            <span className={styles.pillLabel}>On My Subscriptions</span>
-                                            <span className={styles.pillCount}>{subCount}</span>
-                                        </button>
-                                        <button
-                                            className={`${styles.filterPill} ${filterTab === 'explore' ? styles.filterPillActive : ''}`}
-                                            onClick={() => setFilterTab('explore')}
-                                        >
-                                            <span className={styles.iconRecsExplore}><Globe size={14} /></span>
-                                            <span className={styles.pillLabel}>Worldwide & Explore</span>
-                                            <span className={styles.pillCount}>{exploreCount}</span>
-                                        </button>
-                                    </div>
+                                    <SlidingFilterPills
+                                        value={filterTab}
+                                        onChange={(val) => setFilterTab(val)}
+                                        options={[
+                                            {
+                                                value: 'all',
+                                                label: 'All Picks',
+                                                count: similarRecs.length,
+                                                icon: <span className={styles.iconRecsAll}><Layers size={14} /></span>
+                                            },
+                                            {
+                                                value: 'subscriptions',
+                                                label: 'On My Subscriptions',
+                                                count: subCount,
+                                                icon: <span className={styles.iconRecsSubs}><Tv size={14} /></span>
+                                            },
+                                            {
+                                                value: 'explore',
+                                                label: 'Worldwide & Explore',
+                                                count: exploreCount,
+                                                icon: <span className={styles.iconRecsExplore}><Globe size={14} /></span>
+                                            },
+                                        ]}
+                                    />
                                 </>
                             )}
 

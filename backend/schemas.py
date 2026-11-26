@@ -215,6 +215,8 @@ class UserPreferences(BaseModel):
     notify_movie_streaming: Optional[bool] = True
     auto_follow_watching: Optional[bool] = True
     viewing_preference: Optional[str] = "weekly"
+    default_landing_page: Optional[str] = "auto"
+    default_sidebar_collapsed: Optional[bool] = True
 
     class Config:
         extra = "allow"

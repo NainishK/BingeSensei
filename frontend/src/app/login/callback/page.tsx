@@ -18,7 +18,7 @@ export default function AuthCallbackPage() {
             localStorage.setItem('token', token);
             const isNewUser = params.get('new_user') === 'true';
             // Immediate seamless redirect without artificial lag
-            window.location.replace(isNewUser ? '/welcome' : '/dashboard/watchlist');
+            window.location.replace(isNewUser ? '/welcome' : '/dashboard');
         } else if (error) {
             setStatus('Authentication failed. Redirecting to login...');
             setTimeout(() => router.replace('/login'), 1500);
