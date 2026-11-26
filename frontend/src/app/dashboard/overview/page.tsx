@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { PlusCircle, Info, Sparkles, TrendingUp, Wallet, Search, BarChart2, Play, Tv, Check, Plus, Minus, Star, Film, ChevronRight } from 'lucide-react';
+import { PlusCircle, Info, Sparkles, TrendingUp, Wallet, Search, BarChart2, Play, Tv, Check, Plus, Minus, Star, Film, ChevronRight, AlertTriangle } from 'lucide-react';
 import MediaCard from '@/components/MediaCard';
 import styles from '../dashboard.module.css';
 import { useRecommendations } from '@/context/RecommendationsContext';
@@ -62,6 +62,8 @@ export default function DashboardOverview() {
     // Premium Visual Quick Watch State & Modal Sync
     const [localWatchNowRecs, setLocalWatchNowRecs] = useState<any[]>([]);
     const [selectedItemForModal, setSelectedItemForModal] = useState<any>(null);
+
+    const cancelRecs = (dashboardRecs || []).filter(r => r.type === 'cancel' && r.service_name !== 'YouTube Premium');
 
     useEffect(() => {
         if (dashboardRecs) {
@@ -453,6 +455,35 @@ export default function DashboardOverview() {
                             <div key={index} className={styles.legendItem}>
                                 <div className={styles.legendDot} style={{ backgroundColor: item.color }} />
                                 <span>{item.name} ({Math.round(stats?.total_cost ? (item.cost / stats.total_cost) * 100 : 0)}%)</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Unused Subscriptions */}
+            {cancelRecs.length > 0 && (
+                <div style={{ marginBottom: '2rem' }}>
+                    <h2 className={styles.sectionTitle} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.25rem', color: '#ef4444' }}>
+                        <AlertTriangle size={20} />
+                        <span>Unused Subscriptions</span>
+                    </h2>
+                    <div className={styles.unusedGrid}>
+                        {cancelRecs.map((rec, index) => (
+                            <div key={index} className={styles.unusedCard}>
+                                <div className={styles.unusedCardHeader}>
+                                    <div className={styles.serviceIdentity}>
+                                        <ServiceIcon name={rec.service_name} logoUrl={rec.logo_url} />
+                                        <h4 className={styles.serviceName}>{rec.service_name}</h4>
+                                    </div>
+                                    <span className={styles.unusedSaveBadge}>
+                                        Save {formatCurrency(rec.savings || 0, user?.country || 'US')}
+                                        <span style={{ fontSize: '0.8em', opacity: 0.9, fontWeight: 500 }}>
+                                            {rec.billing_cycle?.toLowerCase() === 'yearly' ? '/yr' : '/mo'}
+                                        </span>
+                                    </span>
+                                </div>
+                                <p className={styles.unusedReason}>{rec.reason}</p>
                             </div>
                         ))}
                     </div>

@@ -441,7 +441,6 @@ export default function RecommendationsPage() {
     };
 
     const trendingRecs = dashboardRecs.filter(r => r.type === 'trending' || r.type === 'global_trending');
-    const cancelRecs = dashboardRecs.filter(r => r.type === 'cancel' && r.service_name !== 'YouTube Premium');
 
     const isTrendingOnSub = (rec: Recommendation) => {
         if (rec.type === 'trending') return true;
@@ -1256,42 +1255,6 @@ export default function RecommendationsPage() {
 
             {/* Lower Content inside Container */}
             <div className={styles.container}>
-
-            {/* Unused Subscriptions */}
-            {cancelRecs.length > 0 && (
-                <section className={styles.section}>
-                    <div className={styles.sectionHeader}>
-                        <h2 className={styles.sectionTitle} style={{ color: '#dc2626' }}>
-                            <AlertTriangle className={styles.sectionIcon} /> Unused Subscriptions
-                        </h2>
-                    </div>
-                    <div className={`${styles.grid} ${styles.unusedGrid}`}>
-                        {cancelRecs.map((rec, index) => (
-                            <div key={index} className={`${styles.recommendationItem} ${styles.unusedItem}`} style={{ cursor: 'default' }}>
-                                <div className={styles.cardHeader}>
-                                    <div className={styles.unusedServiceInfo}>
-                                        <ServiceIcon
-                                            name={rec.service_name}
-                                            className={styles.serviceLogo}
-                                            fallbackClassName={styles.serviceLogoFallback}
-                                        />
-                                        <span className={styles.serviceName}>{rec.service_name}</span>
-                                    </div>
-
-
-                                    <span className={`${styles.badge} ${styles.badgeRed}`}>
-                                        Save {formatCurrency(rec.savings, userCountry)}
-                                        <span style={{ fontSize: '0.8em', opacity: 0.9, fontWeight: 500 }}>
-                                            {rec.billing_cycle?.toLowerCase() === 'yearly' ? '/yr' : '/mo'}
-                                        </span>
-                                    </span>
-                                </div>
-                                <p className={styles.cardReason} style={{ marginBottom: 0 }}>{rec.reason}</p>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
 
             {/* Unified AI Analyst Entry Point */}
             <section className={styles.section}>

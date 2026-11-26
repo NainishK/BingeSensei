@@ -1660,16 +1660,17 @@
 .heroStatusDropdownContainer {
     position: relative;
     display: inline-block;
-    width: 200px;
+    min-width: 215px;
+    width: auto;
 }
 
 .heroBtnPrimary,
 .heroBtnInWatchlist {
     width: 100%;
-    min-width: 200px;
+    min-width: 215px;
     height: 44px;
     box-sizing: border-box;
-    padding: 0 1.15rem;
+    padding: 0 1rem;
     border-radius: 12px;
     font-size: 0.9rem;
     font-weight: 700;
